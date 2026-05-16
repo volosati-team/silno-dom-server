@@ -17,8 +17,40 @@
   </div>
 </div>
 
+<div class="card" style="margin-bottom:12px">
+  <div style="font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);margin-bottom:12px">Обновление</div>
+  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+    <span style="font-size:.7rem;color:var(--text3)">{{ git_hash }}</span>
+    <button id="upd-btn" class="btn on" style="padding:6px 16px" onclick="doUpdate()">git pull + restart</button>
+    <span id="upd-status" style="font-size:.7rem;color:var(--text3)"></span>
+  </div>
+</div>
+
 <div class="card">
   <div style="font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);margin-bottom:12px">mosquitto.conf</div>
   <pre>{{ conf }}</pre>
 </div>
+
+<script>
+async function doUpdate() {
+  const btn = document.getElementById('upd-btn');
+  const st = document.getElementById('upd-status');
+  btn.disabled = true;
+  btn.textContent = '...';
+  st.textContent = 'запускаем обновление';
+  try {
+    const r = await fetch('/admin/update', {method:'POST'});
+    if (r.ok) {
+      st.textContent = 'обновление запущено — сервер перезапустится через ~10 сек';
+      setTimeout(() => { st.textContent = 'перезагружаем...'; location.reload(); }, 12000);
+    } else {
+      st.textContent = 'ошибка: ' + r.status;
+      btn.disabled = false; btn.textContent = 'git pull + restart';
+    }
+  } catch(e) {
+    st.textContent = 'ошибка связи';
+    btn.disabled = false; btn.textContent = 'git pull + restart';
+  }
+}
+</script>
 {% endblock %}

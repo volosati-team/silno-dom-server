@@ -9,6 +9,7 @@ Run: uvicorn app:app --host 0.0.0.0 --port 8080
 import os
 import json
 import secrets
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -170,13 +171,36 @@ async def set_light(ch: int, cmd: str, request: Request):
 async def config_page(request: Request):
     _require_auth(request)
     conf_text = CONF_PATH.read_text() if CONF_PATH.exists() else "Файл не найден"
+    try:
+        git_hash = subprocess.check_output(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(CONF_PATH.parent), text=True
+        ).strip()
+    except Exception:
+        git_hash = "unknown"
     return templates.TemplateResponse(request, "config.html", {
         "conf": conf_text,
         "mqtt_ok": _mqtt_connected,
         "mqtt_host": MQTT_HOST,
         "mqtt_port": MQTT_PORT,
+        "git_hash": git_hash,
         "logged_in": True,
     })
+
+UPDATE_SCRIPT = Path(__file__).parent.parent / "update.sh"
+
+@app.post("/admin/update")
+async def admin_update(request: Request):
+    _require_auth(request)
+    if not UPDATE_SCRIPT.exists():
+        raise HTTPException(500, "update.sh not found")
+    subprocess.Popen(
+        ["bash", str(UPDATE_SCRIPT)],
+        start_new_session=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return JSONResponse({"status": "started"})
 
 @app.get("/log", response_class=HTMLResponse)
 async def log_page(request: Request):
