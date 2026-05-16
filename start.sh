@@ -19,8 +19,9 @@ MQTT_USER="${MQTT_USER:-silnodom}"
 MQTT_PASS="${MQTT_PASS:-12345}"
 if [ ! -f "$SCRIPT_DIR/mqtt_passwords" ]; then
     log "creating mqtt_passwords for user ${MQTT_USER}..."
-    mosquitto_passwd -c -b "$SCRIPT_DIR/mqtt_passwords" "$MQTT_USER" "$MQTT_PASS"
-    log "mqtt_passwords created"
+    mosquitto_passwd -c -b "$SCRIPT_DIR/mqtt_passwords" "$MQTT_USER" "$MQTT_PASS" \
+        || log "WARNING: mosquitto_passwd failed — MQTT running without auth"
+    [ -f "$SCRIPT_DIR/mqtt_passwords" ] && log "mqtt_passwords created"
 fi
 
 # Mosquitto
