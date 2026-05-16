@@ -4,10 +4,10 @@ home_mqtt_bridge.py — MOiO ↔ home topics bridge on a single local Mosquitto.
 
 MOiO connects to localhost as a client. No separate broker needed.
 Topics:
-  moio/moio3ch/{MAC}/ch{N}       ← MOiO publishes state (true/false)
-  moio/moio3ch/{MAC}/ch{N}/set   → bridge publishes commands (true/false)
-  home/light/ch{N}/state         → bridge publishes for web UI (on/off)
-  home/light/ch{N}/set           ← web UI publishes commands (on/off)
+  moio/moio3ch/{MAC}_ch{N}/devices.capabilities.on_off/on     ← MOiO state (true/false)
+  moio/moio3ch/{MAC}_ch{N}/devices.capabilities.on_off/on/set → commands (true/false)
+  home/light/ch{N}/state   → bridge publishes for web UI (on/off)
+  home/light/ch{N}/set     ← web UI publishes commands (on/off)
 """
 
 import os
@@ -34,10 +34,10 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 def moio_state_topic(ch: int) -> str:
-    return f"moio/moio3ch/{MOIO_MAC}/ch{ch}"
+    return f"moio/moio3ch/{MOIO_MAC}_ch{ch}/devices.capabilities.on_off/on"
 
 def moio_cmd_topic(ch: int) -> str:
-    return f"moio/moio3ch/{MOIO_MAC}/ch{ch}/set"
+    return f"moio/moio3ch/{MOIO_MAC}_ch{ch}/devices.capabilities.on_off/on/set"
 
 def home_state_topic(ch: int) -> str:
     return f"home/light/ch{ch}/state"
