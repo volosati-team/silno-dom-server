@@ -5,6 +5,7 @@
 #   powershell -ExecutionPolicy Bypass -File install.ps1
 #
 # Что делает:
+#   0. Останавливает и отключает Windows-сервис Mosquitto (если установлен)
 #   1. Ставит mosquitto, python3, git в WSL Debian
 #   2. Создаёт WSL-пользователя mqtt-silno
 #   3. Клонирует репо в /home/mqtt-silno/silno-dom-server
@@ -40,6 +41,20 @@ Write-Host ""
 Write-Host "=== silno-dom-server install ===" -ForegroundColor Yellow
 Write-Host "Distro: $WslDistro  User: $MqttUser  Repo: $RepoDir"
 Write-Host ""
+
+# 0. Убить Windows Mosquitto (если есть)
+Write-Host "[0/6] Windows Mosquitto service..." -ForegroundColor Cyan
+$svc = Get-Service -Name "mosquitto" -ErrorAction SilentlyContinue
+if ($svc) {
+    if ($svc.Status -eq "Running") {
+        Stop-Service -Name "mosquitto" -Force
+        Write-Host "  остановлен"
+    }
+    Set-Service -Name "mosquitto" -StartupType Disabled
+    Write-Host "  автозапуск отключён"
+} else {
+    Write-Host "  сервис не найден, пропуск"
+}
 
 # 1. Пакеты
 Write-Host "[1/5] Установка пакетов (apt)..." -ForegroundColor Cyan
