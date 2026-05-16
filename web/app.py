@@ -16,8 +16,9 @@ from datetime import datetime
 
 import paho.mqtt.client as mqtt
 from fastapi import FastAPI, Request, Response, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────
 WEB_PASSWORD   = os.getenv("WEB_PASSWORD", "silnodom")
@@ -181,3 +182,37 @@ async def api_state(request: Request):
         "mqtt_connected": _mqtt_connected,
         "lights": {f"ch{ch}": _state[ch] for ch in ACTIVE_CHANNELS},
     }
+
+# ─── PUBLIC REST API (no auth) ──────────────────────────────────────────────
+
+class SetPayload(BaseModel):
+    ch1: bool | None = None
+    ch3: bool | None = None
+
+class TogglePayload(BaseModel):
+    ch: str
+
+@app.get("/state")
+async def public_state():
+    return {f"ch{ch}": _state.get(ch) for ch in ACTIVE_CHANNELS}
+
+@app.post("/set")
+async def public_set(payload: SetPayload):
+    mapping = {1: payload.ch1, 3: payload.ch3}
+    for ch, val in mapping.items():
+        if val is not None:
+            _mqtt_client.publish(f"home/light/ch{ch}/set", "on" if val else "off", qos=1)
+    return {f"ch{ch}": _state.get(ch) for ch in ACTIVE_CHANNELS}
+
+@app.post("/toggle")
+async def public_toggle(payload: TogglePayload):
+    try:
+        ch = int(payload.ch.replace("ch", ""))
+    except ValueError:
+        raise HTTPException(400, "bad channel")
+    if ch not in ACTIVE_CHANNELS:
+        raise HTTPException(400, "unknown channel")
+    current = _state.get(ch)
+    cmd = "off" if current else "on"
+    _mqtt_client.publish(f"home/light/ch{ch}/set", cmd, qos=1)
+    return {"ch": payload.ch, "cmd": cmd}
