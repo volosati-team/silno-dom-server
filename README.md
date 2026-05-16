@@ -2,96 +2,151 @@
 
 Серверная сторона умного дома: MQTT-мост MOiO ↔ Mosquitto + веб-панель управления освещением.
 
+## Архитектура
+
+```
+MOiO (физическое реле) ──MQTT──► Mosquitto (localhost:1883)
+                                        │
+                          home_mqtt_bridge.py (мост)
+                                        │
+                          web/app.py (FastAPI, :8080)
+                                        │
+                          cloudflared (quick tunnel)
+                                        │
+                          CF Worker moio-control (постоянный URL)
+                          https://moio-control.voloagents.workers.dev
+```
+
+MOiO подключается к локальному Mosquitto как клиент (не имеет своего брокера).
+Мост транслирует между internal-топиками (`home/light/chN/…`) и MOiO-топиками
+(`moio/moio3ch/{MAC}_chN/devices.capabilities.on_off/on[/set]`).
+
 ## Структура
 
 ```
 silno-dom-server/
-  home_mqtt_bridge.py     ← мост: MOiO broker ↔ центральный Mosquitto
+  home_mqtt_bridge.py     ← мост: internal Mosquitto ↔ MOiO topics
   mosquitto_open.conf     ← конфиг Mosquitto (порты 1883 + 9001 websockets)
   requirements.txt
+  start.sh                ← запуск всех сервисов + CF tunnel + KV update
+  stop.sh
   web/
-    app.py                ← FastAPI веб-панель
+    app.py                ← FastAPI: панель + REST API
     templates/
       login.html
       base.html
-      dashboard.html
+      dashboard.html      ← toggle-switch UI, JS polling
       config.html
-```
-
-## Установка (Windows + WSL Debian)
-
-Запускать от **Administrator** в PowerShell:
-
-```powershell
-git clone https://github.com/volosati-team/silno-dom-server "$env:TEMP\silno-dom-server"
-powershell -ExecutionPolicy Bypass -File "$env:TEMP\silno-dom-server\install.ps1"
-```
-
-`install.ps1` сделает всё: установит пакеты в WSL, создаст пользователя `mqtt-silno`,
-зарегистрирует автозапуск в Task Scheduler.
-
-## Зависимости
-
-Python 3.11+, Mosquitto 2.x.
-
-```bash
-pip install -r requirements.txt
+      log.html
+  workers/
+    moio-control/         ← CF Worker: проксирует к tunnel URL из KV
+    silno-mqtt/           ← CF Worker: legacy
 ```
 
 ## Конфигурация
 
-Все параметры через переменные окружения:
+Все параметры через `.env` (скопировать из `.env.example`):
 
-| Переменная       | Описание                              | Дефолт        |
-|------------------|---------------------------------------|---------------|
-| `WEB_PASSWORD`   | Пароль для входа в веб-панель         | `silnodom`    |
-| `SESSION_SECRET` | Секрет сессии (случайный если не задан)| auto          |
-| `HOME_HOST`      | Хост центрального Mosquitto           | `localhost`   |
-| `HOME_PORT`      | Порт центрального Mosquitto           | `1883`        |
-| `MOIO_HOST`      | IP-адрес MOiO (его встроенный broker) | `192.168.28.160` |
-| `MOIO_PORT`      | Порт MOiO broker                      | `1883`        |
-| `MOIO_DEVICE_ID` | Device ID MOiO (из прошивки)          | `782184803ce4` |
+| Переменная      | Описание                              | Дефолт         |
+|-----------------|---------------------------------------|----------------|
+| `HOME_HOST`     | Хост Mosquitto                        | `localhost`    |
+| `HOME_PORT`     | Порт Mosquitto                        | `1883`         |
+| `MOIO_MAC`      | MAC-адрес MOiO (из прошивки)          | `782184803ce4` |
+| `WEB_PORT`      | Порт веб-панели                       | `8080`         |
+| `PASS_VOLOSATI` | Пароль пользователя volosati          | `12345`        |
+| `PASS_MAX`      | Пароль пользователя max               | `12345`        |
+| `PASS_GUEST`    | Пароль гостя (пустая строка = без пароля) | `""`       |
+| `CF_API_TOKEN`  | CF API токен для записи в KV          | (опц.)         |
+| `CF_ACCOUNT_ID` | CF Account ID                         | (опц.)         |
 
-## Запуск
+## Права доступа
 
-**1. Mosquitto**
+| Роль        | Дашборд | Свет | Конфиг/Лог |
+|-------------|---------|------|------------|
+| Анонимный   | ✓       | ✗    | ✗          |
+| Авторизованный | ✓    | ✓    | ✓          |
 
-```bash
-mosquitto -c mosquitto_open.conf
+> Управление светом через кнопки UI требует логина.
+> REST API (`/set`, `/toggle`, `/state`) открыт без авторизации.
+
+## Запуск (Windows + WSL Debian)
+
+```powershell
+# От пользователя mqtt-silno в WSL
+wsl -d Debian -u mqtt-silno -- bash -c "cd /home/mqtt-silno/silno-dom-server && bash start.sh"
 ```
 
-**2. MQTT-мост** (в фоне или через systemd)
+Или полный рестарт + git pull + KV update:
 
-```bash
-python3 home_mqtt_bridge.py
+```powershell
+powershell -ExecutionPolicy Bypass -File ".\restart_silno.ps1"
 ```
 
-**3. Веб-панель**
+## REST API (без авторизации)
 
-```bash
-WEB_PASSWORD=yourpassword uvicorn web.app:app --host 0.0.0.0 --port 8080
+### GET /state
+
+Текущее состояние каналов (MQTT feedback от устройства).
+
+```json
+{"ch1": true, "ch3": false}
 ```
 
-Открыть: `http://<ip-сервера>:8080`
+### POST /set
 
-## Сеть
-
-Сервер должен дотягиваться до MOiO broker на `192.168.28.160:1883`.
-Если MOiO в гостевой сети, а сервер в домашней — нужен inter-VLAN маршрут:
-
-```bash
-# Разрешить трафик из домашней сети (192.168.1.0/24) к MOiO (192.168.28.160)
-iptables -I FORWARD -s 192.168.1.0/24 -d 192.168.28.160 -p tcp --dport 1883 -j ACCEPT
-iptables -I FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+```json
+{"ch1": true, "ch3": false}
 ```
+
+`null` — не трогать канал. Возвращает текущий state.
+
+### POST /toggle
+
+```json
+{"ch": "ch3"}
+```
+
+Возвращает: `{"ch": "ch3", "cmd": "on"}`.
 
 ## MQTT топики
 
-| Топик                         | Направление       | Описание                  |
-|-------------------------------|-------------------|---------------------------|
-| `home/light/ch1/state`        | bridge → панель   | Состояние споты (on/off)  |
-| `home/light/ch3/state`        | bridge → панель   | Состояние гирлянда        |
-| `home/light/ch1/set`          | панель → bridge   | Команда споты             |
-| `home/light/ch3/set`          | панель → bridge   | Команда гирлянда          |
+| Топик                                         | Направление     | Описание               |
+|-----------------------------------------------|-----------------|------------------------|
+| `home/light/ch1/state`                        | MOiO → панель   | Состояние (on/off)     |
+| `home/light/ch3/state`                        | MOiO → панель   | Состояние              |
+| `home/light/ch1/set`                          | панель → MOiO   | Команда                |
+| `home/light/ch3/set`                          | панель → MOiO   | Команда                |
 
 Канал ch2 физически не подключён.
+
+Реальные MOiO-топики (MAC `782184803ce4`):
+
+```
+moio/moio3ch/782184803ce4_ch1/devices.capabilities.on_off/on        ← state
+moio/moio3ch/782184803ce4_ch1/devices.capabilities.on_off/on/set    ← cmd
+```
+
+## Cloudflare Worker
+
+Постоянный URL: `https://moio-control.voloagents.workers.dev`
+
+Worker читает актуальный tunnel URL из CF KV (`silno_agents / ag_linux_ssh_url`).
+`start.sh` обновляет KV при старте если задан `CF_API_TOKEN`.
+
+## Состояние в UI: cmd vs state
+
+Панель хранит два независимых значения:
+
+- **cmd** — последняя отправленная команда (мгновенный отклик в UI)
+- **state** — реальное состояние, подтверждённое MOiO по MQTT
+
+При загрузке страницы toggle показывает `cmd` (или `state` если `cmd` неизвестен).
+Индикатор "устройство:" показывает `state`. Расхождение — сигнал что команда не прошла.
+
+## Обновление состояния в браузере
+
+После клика по toggle: запросы к `/state` через 0.5, 1.0, 1.5 сек (ловим подтверждение от устройства),
+затем пассивный поллинг каждые 5 сек.
+
+**TODO:** заменить поллинг на Server-Sent Events (SSE) или WebSocket — MQTT-события должны пушиться
+в браузер напрямую, без периодических запросов.
