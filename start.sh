@@ -15,8 +15,8 @@ mkdir -p logs
 log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a logs/start.log; }
 
 # MQTT password file — create from env or defaults (silnodom/12345)
-MQTT_USER="${MQTT_USER:-silnodom}"
-MQTT_PASS="${MQTT_PASS:-12345}"
+export MQTT_USER="${MQTT_USER:-silnodom}"
+export MQTT_PASS="${MQTT_PASS:-12345}"
 if [ ! -f "$SCRIPT_DIR/mqtt_passwords" ]; then
     log "creating mqtt_passwords for user ${MQTT_USER}..."
     mosquitto_passwd -c -b "$SCRIPT_DIR/mqtt_passwords" "$MQTT_USER" "$MQTT_PASS" \
