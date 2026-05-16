@@ -9,18 +9,18 @@
 # Если склонировал в другое место — исправь $WslRepoPath ниже.
 
 param(
-    [string]$WslDistro   = "",          # пусто = дефолтный дистрибутив
-    [string]$WslRepoPath = "~/silno-dom-server",  # путь внутри WSL
+    [string]$WslDistro   = "Debian",
+    [string]$WslUser     = "mqtt-silno",
+    [string]$WslRepoPath = "/home/mqtt-silno/silno-dom-server",
     [string]$TaskName    = "silno-dom-server"
 )
 
-# Определить аргументы wsl.exe
-$wslArgs = if ($WslDistro) { "-d $WslDistro" } else { "" }
-$wslCmd  = "bash -lc 'cd $WslRepoPath && bash start.sh'"
+$userArg = if ($WslUser) { "-u $WslUser" } else { "" }
+$distroArg = "-d $WslDistro"
 
 $action  = New-ScheduledTaskAction `
     -Execute "wsl.exe" `
-    -Argument "$wslArgs -e bash -lc `"cd $WslRepoPath && bash start.sh`""
+    -Argument "$distroArg $userArg -e bash -lc `"cd $WslRepoPath && bash start.sh`""
 
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 
