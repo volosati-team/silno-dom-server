@@ -69,7 +69,7 @@ W "if [ -d '$RepoDir/.git' ]; then sudo -u $MqttUser git -C '$RepoDir' pull --ff
 
 # 4. Python deps
 Write-Host "[4/6] Python deps..." -ForegroundColor Cyan
-WU "pip3 install --user -q -r $RepoDir/requirements.txt"
+WU "pip3 install --user -q --break-system-packages -r $RepoDir/requirements.txt"
 
 # 5. .env
 Write-Host "[5/6] Config (.env)..." -ForegroundColor Cyan
