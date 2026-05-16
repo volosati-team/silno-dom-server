@@ -24,7 +24,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 function W([string]$cmd) {
-    $result = wsl.exe -d $WslDistro -- bash -c $cmd
+    $result = wsl.exe -d $WslDistro -u root -- bash -c $cmd
     if ($LASTEXITCODE -ne 0) { throw "WSL command failed: $cmd" }
     return $result
 }
