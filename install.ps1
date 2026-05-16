@@ -56,24 +56,31 @@ if ($svc) {
     Write-Host "  сервис не найден, пропуск"
 }
 
-# 1. Пакеты
-Write-Host "[1/5] Установка пакетов (apt)..." -ForegroundColor Cyan
-W "apt-get update -q && apt-get install -y mosquitto python3 python3-pip git"
+# 1. Пакеты + cloudflared
+Write-Host "[1/6] Установка пакетов (apt)..." -ForegroundColor Cyan
+W "apt-get update -q && apt-get install -y mosquitto python3 python3-pip git curl"
+W @"
+if ! command -v cloudflared &>/dev/null; then
+  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+  echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared bookworm main' | tee /etc/apt/sources.list.d/cloudflared.list
+  apt-get update -q && apt-get install -y cloudflared
+fi
+"@
 
 # 2. Пользователь
-Write-Host "[2/5] Пользователь $MqttUser..." -ForegroundColor Cyan
+Write-Host "[2/6] Пользователь $MqttUser..." -ForegroundColor Cyan
 W "id $MqttUser >/dev/null 2>&1 || useradd -m -s /bin/bash $MqttUser"
 
 # 3. Клон / pull
-Write-Host "[3/5] Репо..." -ForegroundColor Cyan
+Write-Host "[3/6] Репо..." -ForegroundColor Cyan
 W "if [ -d '$RepoDir/.git' ]; then sudo -u $MqttUser git -C '$RepoDir' pull --ff-only; else sudo -u $MqttUser git clone '$RepoUrl' '$RepoDir'; fi"
 
 # 4. Python зависимости
-Write-Host "[4/5] Python deps..." -ForegroundColor Cyan
+Write-Host "[4/6] Python deps..." -ForegroundColor Cyan
 WU "pip3 install --user -q -r $RepoDir/requirements.txt"
 
 # 5. .env
-Write-Host "[5/5] Конфиг (.env)..." -ForegroundColor Cyan
+Write-Host "[5/6] Конфиг (.env)..." -ForegroundColor Cyan
 W "[ -f '$RepoDir/.env' ] || (sudo -u $MqttUser cp '$RepoDir/.env.example' '$RepoDir/.env' && chmod 600 '$RepoDir/.env')"
 Write-Host ""
 Write-Host "  ! Отредактируй пароль и IP MOiO:" -ForegroundColor Yellow

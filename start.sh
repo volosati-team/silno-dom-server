@@ -40,4 +40,16 @@ else
     log "web pid=$!"
 fi
 
-log "done. http://localhost:${WEB_PORT:-8080}"
+# CF Tunnel (если cloudflared установлен)
+if command -v cloudflared &>/dev/null; then
+    if pgrep -x cloudflared > /dev/null; then
+        log "cloudflared already running, skip"
+    else
+        log "starting CF tunnel..."
+        nohup cloudflared tunnel --url "http://localhost:${WEB_PORT:-8080}" >> logs/cf.log 2>&1 &
+        log "cloudflared pid=$! — URL появится в logs/cf.log через ~5 сек"
+    fi
+fi
+
+log "done. local: http://localhost:${WEB_PORT:-8080}"
+log "cf url:  grep 'trycloudflare.com' logs/cf.log"
