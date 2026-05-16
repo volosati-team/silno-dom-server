@@ -54,9 +54,13 @@ pre{font-size:.75rem;line-height:1.6;color:var(--text2);white-space:pre-wrap;wor
   <span class="nav-logo">СИЛЬНО · ДОМ</span>
   <div class="nav-links">
     <a href="/" {% if active=='dash' %}class="active"{% endif %}>Свет</a>
+    {% if logged_in %}
     <a href="/config" {% if active=='config' %}class="active"{% endif %}>Конфиг</a>
     <a href="/log" {% if active=='log' %}class="active"{% endif %}>Лог</a>
     <a href="/logout">Выход</a>
+    {% else %}
+    <a href="/login" {% if active=='login' %}class="active"{% endif %}>Войти</a>
+    {% endif %}
   </div>
 </nav>
 <main>

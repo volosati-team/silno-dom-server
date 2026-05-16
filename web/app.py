@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-silno-dom-server web UI — admin panel for smart home server.
-Auth: single-user password (set WEB_PASSWORD env var, default: silnodom)
+silno-dom-server web UI — smart home panel.
+Auth: multi-user (USERS dict). Dashboard + lights = public. Config/log = login required.
 MQTT: connects to local Mosquitto, subscribes to home/light/+/state
 Run: uvicorn app:app --host 0.0.0.0 --port 8080
 """
@@ -21,7 +21,6 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────
-WEB_PASSWORD   = os.getenv("WEB_PASSWORD", "silnodom")
 SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32))
 MQTT_HOST      = os.getenv("HOME_HOST",  "localhost")
 MQTT_PORT      = int(os.getenv("HOME_PORT", "1883"))
@@ -31,6 +30,13 @@ LOG_TAIL_LINES = 200
 
 CHANNEL_NAMES  = {1: "Споты", 3: "Гирлянда"}
 ACTIVE_CHANNELS = (1, 3)
+
+# username → password (empty string = no password required)
+USERS: dict[str, str] = {
+    "volosati": os.getenv("PASS_VOLOSATI", "12345"),
+    "max":      os.getenv("PASS_MAX",      "12345"),
+    "guest":    os.getenv("PASS_GUEST",    ""),
+}
 # ────────────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="silno-dom server")
@@ -39,7 +45,7 @@ templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 # ─── STATE ─────────────────────────────────────────────────────────────────
 _state: dict = {ch: None for ch in ACTIVE_CHANNELS}   # None = unknown
 _mqtt_connected = False
-_sessions: dict[str, float] = {}   # token → expiry (unix)
+_sessions: dict[str, dict] = {}    # token → {expiry, username}
 SESSION_TTL = 8 * 3600             # 8 hours
 
 # ─── MQTT CLIENT ───────────────────────────────────────────────────────────
@@ -84,18 +90,24 @@ _mqtt_client = _start_mqtt()
 
 # ─── AUTH ───────────────────────────────────────────────────────────────────
 
-def _new_session() -> str:
+def _check_credentials(username: str, password: str) -> bool:
+    expected = USERS.get(username)
+    if expected is None:
+        return False
+    return secrets.compare_digest(password, expected)
+
+def _new_session(username: str) -> str:
     token = secrets.token_hex(24)
-    _sessions[token] = time.time() + SESSION_TTL
+    _sessions[token] = {"expiry": time.time() + SESSION_TTL, "username": username}
     return token
 
 def _valid_session(token: str | None) -> bool:
     if not token:
         return False
-    exp = _sessions.get(token)
-    if not exp:
+    sess = _sessions.get(token)
+    if not sess:
         return False
-    if time.time() > exp:
+    if time.time() > sess["expiry"]:
         del _sessions[token]
         return False
     return True
@@ -112,13 +124,13 @@ async def login_page(request: Request):
     return templates.TemplateResponse(request, "login.html", {"error": ""})
 
 @app.post("/login")
-async def login(request: Request, password: str = Form(...)):
-    if secrets.compare_digest(password, WEB_PASSWORD):
-        token = _new_session()
+async def login(request: Request, username: str = Form(...), password: str = Form("")):
+    if _check_credentials(username.strip().lower(), password):
+        token = _new_session(username.strip().lower())
         resp = RedirectResponse("/", status_code=302)
         resp.set_cookie("session", token, httponly=True, samesite="lax", max_age=SESSION_TTL)
         return resp
-    return templates.TemplateResponse(request, "login.html", {"error": "Неверный пароль"}, status_code=401)
+    return templates.TemplateResponse(request, "login.html", {"error": "Неверный логин или пароль"}, status_code=401)
 
 @app.get("/logout")
 async def logout(request: Request):
@@ -130,7 +142,6 @@ async def logout(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
-    _require_auth(request)
     lights = {
         ch: {
             "name": CHANNEL_NAMES.get(ch, f"ch{ch}"),
@@ -142,11 +153,11 @@ async def dashboard(request: Request):
         "lights": lights,
         "mqtt_ok": _mqtt_connected,
         "now": datetime.now().strftime("%H:%M:%S"),
+        "logged_in": _valid_session(request.cookies.get("session")),
     })
 
 @app.post("/lights/{ch}/{cmd}")
 async def set_light(ch: int, cmd: str, request: Request):
-    _require_auth(request)
     if ch not in ACTIVE_CHANNELS or cmd not in ("on", "off"):
         raise HTTPException(400, "bad request")
     _mqtt_client.publish(f"home/light/ch{ch}/set", cmd, qos=1)
@@ -161,6 +172,7 @@ async def config_page(request: Request):
         "mqtt_ok": _mqtt_connected,
         "mqtt_host": MQTT_HOST,
         "mqtt_port": MQTT_PORT,
+        "logged_in": True,
     })
 
 @app.get("/log", response_class=HTMLResponse)
@@ -173,6 +185,7 @@ async def log_page(request: Request):
     return templates.TemplateResponse(request, "log.html", {
         "lines": lines,
         "log_path": str(LOG_PATH),
+        "logged_in": True,
     })
 
 @app.get("/api/state")
