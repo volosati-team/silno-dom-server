@@ -11,18 +11,22 @@
 {% for ch, info in lights.items() %}
 <div class="light-card">
   <div class="light-name">{{ info.name }}</div>
-  <div class="light-state {% if info.state == true %}on{% elif info.state == false %}off{% endif %}">
-    {% if info.state == true %}ON
-    {% elif info.state == false %}OFF
+  <div class="light-state {% if info.cmd == true %}on{% elif info.cmd == false %}off{% endif %}">
+    {% if info.cmd == true %}ON
+    {% elif info.cmd == false %}OFF
     {% else %}—{% endif %}
   </div>
   <div class="btn-row">
     <form method="post" action="/lights/{{ ch }}/on" style="display:inline">
-      <button type="submit" class="btn {% if info.state == true %}on{% endif %}">Вкл</button>
+      <button type="submit" class="btn {% if info.cmd == true %}on{% endif %}">Вкл</button>
     </form>
     <form method="post" action="/lights/{{ ch }}/off" style="display:inline">
-      <button type="submit" class="btn {% if info.state == false %}off{% endif %}">Выкл</button>
+      <button type="submit" class="btn {% if info.cmd == false %}off{% endif %}">Выкл</button>
     </form>
+  </div>
+  <div class="device-state">
+    <span class="device-dot {% if info.state == true %}on{% elif info.state == false %}off{% endif %}"></span>
+    <span class="device-label">устройство: {% if info.state == true %}вкл{% elif info.state == false %}выкл{% else %}—{% endif %}</span>
   </div>
 </div>
 {% endfor %}

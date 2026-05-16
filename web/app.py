@@ -43,7 +43,8 @@ app = FastAPI(title="silno-dom server")
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 # ─── STATE ─────────────────────────────────────────────────────────────────
-_state: dict = {ch: None for ch in ACTIVE_CHANNELS}   # None = unknown
+_state: dict = {ch: None for ch in ACTIVE_CHANNELS}   # MQTT feedback from device
+_cmd:   dict = {ch: None for ch in ACTIVE_CHANNELS}   # last command sent
 _mqtt_connected = False
 _sessions: dict[str, dict] = {}    # token → {expiry, username}
 SESSION_TTL = 8 * 3600             # 8 hours
@@ -51,7 +52,7 @@ SESSION_TTL = 8 * 3600             # 8 hours
 # ─── MQTT CLIENT ───────────────────────────────────────────────────────────
 
 def _start_mqtt():
-    global _mqtt_connected
+    global _mqtt_connected, _state
 
     def on_connect(client, userdata, flags, reason_code, properties):
         global _mqtt_connected
@@ -146,6 +147,7 @@ async def dashboard(request: Request):
         ch: {
             "name": CHANNEL_NAMES.get(ch, f"ch{ch}"),
             "state": _state.get(ch),
+            "cmd":   _cmd.get(ch),
         }
         for ch in ACTIVE_CHANNELS
     }
@@ -160,6 +162,7 @@ async def dashboard(request: Request):
 async def set_light(ch: int, cmd: str, request: Request):
     if ch not in ACTIVE_CHANNELS or cmd not in ("on", "off"):
         raise HTTPException(400, "bad request")
+    _cmd[ch] = (cmd == "on")
     _mqtt_client.publish(f"home/light/ch{ch}/set", cmd, qos=1)
     return RedirectResponse("/", status_code=302)
 
@@ -214,6 +217,7 @@ async def public_set(payload: SetPayload):
     mapping = {1: payload.ch1, 3: payload.ch3}
     for ch, val in mapping.items():
         if val is not None:
+            _cmd[ch] = val
             _mqtt_client.publish(f"home/light/ch{ch}/set", "on" if val else "off", qos=1)
     return {f"ch{ch}": _state.get(ch) for ch in ACTIVE_CHANNELS}
 
@@ -227,5 +231,6 @@ async def public_toggle(payload: TogglePayload):
         raise HTTPException(400, "unknown channel")
     current = _state.get(ch)
     cmd = "off" if current else "on"
+    _cmd[ch] = (cmd == "on")
     _mqtt_client.publish(f"home/light/ch{ch}/set", cmd, qos=1)
     return {"ch": payload.ch, "cmd": cmd}
