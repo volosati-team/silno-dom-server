@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% set active = 'config' %}
+
+{% block content %}
+<h2>Конфигурация</h2>
+
+<div class="card" style="margin-bottom:12px">
+  <div style="font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);margin-bottom:8px">MQTT</div>
+  <div style="display:flex;gap:24px;align-items:center">
+    <span>
+      <span class="status-dot {% if mqtt_ok %}ok{% else %}err{% endif %}"></span>
+      <span style="font-size:.75rem">{{ mqtt_host }}:{{ mqtt_port }}</span>
+    </span>
+    <span style="font-size:.65rem;color:var(--text3)">
+      {% if mqtt_ok %}connected{% else %}disconnected{% endif %}
+    </span>
+  </div>
+</div>
+
+<div class="card">
+  <div style="font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text2);margin-bottom:12px">mosquitto.conf</div>
+  <pre>{{ conf }}</pre>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>СИЛЬНО · ДОМ</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,Arial,sans-serif;background:#000;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh}
+.wrap{width:280px}
+.logo{font-size:.7rem;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:#fff500;margin-bottom:32px}
+input[type=password]{width:100%;padding:10px 0;background:transparent;border:none;border-bottom:1px solid #333;color:#fff;font-size:.9rem;outline:none;letter-spacing:.05em}
+input:focus{border-bottom-color:#fff}
+button{margin-top:24px;width:100%;padding:10px;background:#fff500;border:none;color:#000;font-size:.7rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;font-family:inherit}
+button:hover{background:#e6dc00}
+.err{color:#f87171;font-size:.75rem;margin-top:12px;letter-spacing:.05em}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">СИЛЬНО · ДОМ</div>
+  <form method="post" action="/login">
+    <input type="password" name="password" placeholder="пароль" autofocus>
+    <button type="submit">Войти</button>
+    {% if error %}<p class="err">{{ error }}</p>{% endif %}
+  </form>
+</div>
+</body>
+</html>
