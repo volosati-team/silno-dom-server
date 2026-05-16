@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 *.pyo
 *.session
+workers/**/.wrangler/
