@@ -25,6 +25,8 @@ from pydantic import BaseModel
 SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32))
 MQTT_HOST      = os.getenv("HOME_HOST",  "localhost")
 MQTT_PORT      = int(os.getenv("HOME_PORT", "1883"))
+MQTT_USER      = os.getenv("MQTT_USER", "")
+MQTT_PASS      = os.getenv("MQTT_PASS", "")
 CONF_PATH      = Path(__file__).parent.parent / "mosquitto_open.conf"
 LOG_PATH       = Path(__file__).parent.parent / "home_mqtt_bridge.log"
 LOG_TAIL_LINES = 200
@@ -72,6 +74,8 @@ def _start_mqtt():
                 _state[ch] = msg.payload.decode().strip().lower() == "on"
 
     c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="web-ui")
+    if MQTT_USER:
+        c.username_pw_set(MQTT_USER, MQTT_PASS)
     c.on_connect = on_connect
     c.on_disconnect = on_disconnect
     c.on_message = on_message

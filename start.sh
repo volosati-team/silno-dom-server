@@ -14,6 +14,15 @@ mkdir -p logs
 
 log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a logs/start.log; }
 
+# MQTT password file — create from env or defaults (silnodom/12345)
+MQTT_USER="${MQTT_USER:-silnodom}"
+MQTT_PASS="${MQTT_PASS:-12345}"
+if [ ! -f "$SCRIPT_DIR/mqtt_passwords" ]; then
+    log "creating mqtt_passwords for user ${MQTT_USER}..."
+    mosquitto_passwd -b "$SCRIPT_DIR/mqtt_passwords" "$MQTT_USER" "$MQTT_PASS"
+    log "mqtt_passwords created"
+fi
+
 # Mosquitto
 if pgrep -x mosquitto > /dev/null; then
     log "mosquitto already running, skip"
@@ -46,6 +55,7 @@ if command -v cloudflared &>/dev/null; then
         log "cloudflared already running, skip"
     else
         log "starting CF tunnel..."
+        truncate -s 0 logs/cf.log 2>/dev/null || true   # clear stale URLs before fresh start
         nohup cloudflared tunnel --url "http://localhost:${WEB_PORT:-8080}" >> logs/cf.log 2>&1 &
         log "cloudflared pid=$! — URL появится в logs/cf.log через ~5 сек"
     fi

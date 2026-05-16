@@ -16,9 +16,11 @@ import logging
 import paho.mqtt.client as mqtt
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────
-HOME_BROKER_HOST  = os.getenv("HOME_HOST",  "localhost")
+HOME_BROKER_HOST  = os.getenv("HOME_HOST",     "localhost")
 HOME_BROKER_PORT  = int(os.getenv("HOME_PORT", "1883"))
-MOIO_MAC          = os.getenv("MOIO_MAC",   "782184803ce4")
+MOIO_MAC          = os.getenv("MOIO_MAC",      "782184803ce4")
+MQTT_USER         = os.getenv("MQTT_USER",     "")
+MQTT_PASS         = os.getenv("MQTT_PASS",     "")
 ACTIVE_CHANNELS   = (1, 3)
 POLL_INTERVAL     = 30
 # ────────────────────────────────────────────────────────────────────────────
@@ -51,6 +53,8 @@ _state: dict[int, bool] = {}
 class Bridge:
     def __init__(self):
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="bridge")
+        if MQTT_USER:
+            self.client.username_pw_set(MQTT_USER, MQTT_PASS)
         self.client.on_connect = self._on_connect
         self.client.on_message = self._on_message
 

@@ -1,0 +1,9 @@
+# MQTT ACL — silno-dom-server
+#
+# Authenticated clients (bridge, web app) — full access to all topics.
+user silnodom
+topic readwrite #
+
+# Anonymous clients (MOiO device — no auth support in firmware)
+# Restricted to moio/# namespace only. Cannot publish to home/# directly.
+topic readwrite moio/#
