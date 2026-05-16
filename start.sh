@@ -53,3 +53,24 @@ fi
 
 log "done. local: http://localhost:${WEB_PORT:-8080}"
 log "cf url:  grep 'trycloudflare.com' logs/cf.log"
+
+# Write tunnel URL to CF KV so workers pick it up automatically
+if [ -n "${CF_API_TOKEN:-}" ] && [ -n "${CF_ACCOUNT_ID:-}" ]; then
+    log "waiting for tunnel URL..."
+    for i in $(seq 1 12); do
+        TUNNEL_URL=$(grep -m1 'trycloudflare.com' logs/cf.log 2>/dev/null | grep -oP 'https://[^\s]+' | head -1)
+        [ -n "$TUNNEL_URL" ] && break
+        sleep 5
+    done
+    if [ -n "$TUNNEL_URL" ]; then
+        curl -sf -X PUT \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/storage/kv/namespaces/fed3fe1caf3e464fbb582b03f2e5a4ab/values/ag_linux_ssh_url" \
+            -H "Authorization: Bearer ${CF_API_TOKEN}" \
+            -H "Content-Type: text/plain" \
+            --data "$TUNNEL_URL" > /dev/null \
+        && log "KV updated: $TUNNEL_URL" \
+        || log "KV update failed"
+    else
+        log "tunnel URL not found in log, KV not updated"
+    fi
+fi

@@ -1,11 +1,12 @@
-// Proxy to silno-dom-server running behind CF quick tunnel.
-// Update BACKEND when the quick tunnel URL changes (or switch to named tunnel).
-const BACKEND = "https://hugh-niagara-stylish-effectively.trycloudflare.com";
+// Proxy to silno-dom-server. Backend URL stored in CF KV (key: ag_linux_ssh_url).
+// Fallback: hardcoded BACKEND_FALLBACK (update when KV not yet populated).
+const BACKEND_FALLBACK = "https://hugh-niagara-stylish-effectively.trycloudflare.com";
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
+    const backend = (env.TUNNEL_KV && await env.TUNNEL_KV.get("ag_linux_ssh_url")) || BACKEND_FALLBACK;
     const url = new URL(request.url);
-    const target = BACKEND + url.pathname + url.search;
+    const target = backend + url.pathname + url.search;
     return fetch(new Request(target, {
       method: request.method,
       headers: request.headers,
