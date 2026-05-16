@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% set active = 'log' %}
+
+{% block head %}
+<meta http-equiv="refresh" content="10">
+{% endblock %}
+
+{% block content %}
+<h2>Лог моста</h2>
+
+<div class="card" style="margin-bottom:12px">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text2)">
+      {{ log_path }}
+    </span>
+    <span style="font-size:.65rem;color:var(--text3)">обновляется каждые 10с</span>
+  </div>
+</div>
+
+<div class="card">
+  {% if lines %}
+  <pre>{% for line in lines %}{{ line }}
+{% endfor %}</pre>
+  {% else %}
+  <pre style="color:var(--text3)">Лог пуст или файл не найден</pre>
+  {% endif %}
+</div>
+{% endblock %}

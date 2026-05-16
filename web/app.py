@@ -25,6 +25,8 @@ SESSION_SECRET = os.getenv("SESSION_SECRET", secrets.token_hex(32))
 MQTT_HOST      = os.getenv("HOME_HOST",  "localhost")
 MQTT_PORT      = int(os.getenv("HOME_PORT", "1883"))
 CONF_PATH      = Path(__file__).parent.parent / "mosquitto_open.conf"
+LOG_PATH       = Path(__file__).parent.parent / "home_mqtt_bridge.log"
+LOG_TAIL_LINES = 200
 
 CHANNEL_NAMES  = {1: "Споты", 3: "Гирлянда"}
 ACTIVE_CHANNELS = (1, 3)
@@ -158,6 +160,18 @@ async def config_page(request: Request):
         "mqtt_ok": _mqtt_connected,
         "mqtt_host": MQTT_HOST,
         "mqtt_port": MQTT_PORT,
+    })
+
+@app.get("/log", response_class=HTMLResponse)
+async def log_page(request: Request):
+    _require_auth(request)
+    if LOG_PATH.exists():
+        lines = LOG_PATH.read_text(encoding="utf-8", errors="replace").splitlines()[-LOG_TAIL_LINES:]
+    else:
+        lines = []
+    return templates.TemplateResponse(request, "log.html", {
+        "lines": lines,
+        "log_path": str(LOG_PATH),
     })
 
 @app.get("/api/state")
