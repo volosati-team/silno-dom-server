@@ -1,9 +1,13 @@
 # MQTT ACL — silno-dom-server
 #
-# Authenticated clients (bridge, web app) — full access to all topics.
+# IMPORTANT: Default rules (no `user` prefix) apply to anonymous clients only
+# and MUST appear BEFORE any `user` block. Mosquitto has no "end user" marker —
+# anything after `user X` belongs to X until the next `user` line or EOF.
+
+# Anonymous clients (MOiO device — no MQTT auth support in firmware)
+# Restricted to moio/# namespace only.
+topic readwrite moio/#
+
+# Authenticated clients (bridge, web app use MQTT_USER/MQTT_PASS)
 user silnodom
 topic readwrite #
-
-# Anonymous clients (MOiO device — no auth support in firmware)
-# Restricted to moio/# namespace only. Cannot publish to home/# directly.
-topic readwrite moio/#
