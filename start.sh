@@ -19,7 +19,7 @@ MQTT_USER="${MQTT_USER:-silnodom}"
 MQTT_PASS="${MQTT_PASS:-12345}"
 if [ ! -f "$SCRIPT_DIR/mqtt_passwords" ]; then
     log "creating mqtt_passwords for user ${MQTT_USER}..."
-    mosquitto_passwd -b "$SCRIPT_DIR/mqtt_passwords" "$MQTT_USER" "$MQTT_PASS"
+    mosquitto_passwd -c -b "$SCRIPT_DIR/mqtt_passwords" "$MQTT_USER" "$MQTT_PASS"
     log "mqtt_passwords created"
 fi
 
