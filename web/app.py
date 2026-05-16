@@ -106,17 +106,16 @@ def _require_auth(request: Request):
 
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request, "error": ""})
+    return templates.TemplateResponse(request, "login.html", {"error": ""})
 
 @app.post("/login")
-async def login(password: str = Form(...)):
+async def login(request: Request, password: str = Form(...)):
     if secrets.compare_digest(password, WEB_PASSWORD):
         token = _new_session()
         resp = RedirectResponse("/", status_code=302)
         resp.set_cookie("session", token, httponly=True, samesite="lax", max_age=SESSION_TTL)
         return resp
-    return templates.TemplateResponse("login.html",
-        {"request": {}, "error": "Неверный пароль"}, status_code=401)
+    return templates.TemplateResponse(request, "login.html", {"error": "Неверный пароль"}, status_code=401)
 
 @app.get("/logout")
 async def logout(request: Request):
@@ -136,8 +135,7 @@ async def dashboard(request: Request):
         }
         for ch in ACTIVE_CHANNELS
     }
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "dashboard.html", {
         "lights": lights,
         "mqtt_ok": _mqtt_connected,
         "now": datetime.now().strftime("%H:%M:%S"),
@@ -155,8 +153,7 @@ async def set_light(ch: int, cmd: str, request: Request):
 async def config_page(request: Request):
     _require_auth(request)
     conf_text = CONF_PATH.read_text() if CONF_PATH.exists() else "Файл не найден"
-    return templates.TemplateResponse("config.html", {
-        "request": request,
+    return templates.TemplateResponse(request, "config.html", {
         "conf": conf_text,
         "mqtt_ok": _mqtt_connected,
         "mqtt_host": MQTT_HOST,
