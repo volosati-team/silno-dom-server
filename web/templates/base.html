@@ -51,6 +51,15 @@ h2{font-size:.7rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase
 .device-dot.off{background:#f87171}
 .device-label{font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
 
+.toggle-wrap{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.toggle-switch{position:relative;display:inline-block;width:50px;height:26px;flex-shrink:0;cursor:pointer}
+.toggle-switch input{opacity:0;width:0;height:0;position:absolute}
+.tog-track{position:absolute;inset:0;background:var(--off);border-radius:13px;transition:.25s}
+.toggle-switch input:checked~.tog-track{background:var(--accent)}
+.tog-thumb{position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s;pointer-events:none}
+.toggle-switch input:checked~.tog-track .tog-thumb{transform:translateX(24px)}
+.tog-label{font-size:.85rem;font-weight:700;letter-spacing:.05em;color:var(--text2);min-width:40px}
+
 pre{font-size:.75rem;line-height:1.6;color:var(--text2);white-space:pre-wrap;word-break:break-all}
 </style>
 {% block head %}{% endblock %}

@@ -9,28 +9,57 @@
 
 <div class="light-grid">
 {% for ch, info in lights.items() %}
+{% set is_on = (info.cmd == true) if (info.cmd is not none) else (info.state == true) %}
 <div class="light-card">
   <div class="light-name">{{ info.name }}</div>
-  <div class="light-state {% if info.cmd == true %}on{% elif info.cmd == false %}off{% endif %}">
-    {% if info.cmd == true %}ON
-    {% elif info.cmd == false %}OFF
-    {% else %}—{% endif %}
-  </div>
-  <div class="btn-row">
-    <form method="post" action="/lights/{{ ch }}/on" style="display:inline">
-      <button type="submit" class="btn {% if info.cmd == true %}on{% endif %}">Вкл</button>
-    </form>
-    <form method="post" action="/lights/{{ ch }}/off" style="display:inline">
-      <button type="submit" class="btn {% if info.cmd == false %}off{% endif %}">Выкл</button>
-    </form>
+  <div class="toggle-wrap">
+    <label class="toggle-switch">
+      <input type="checkbox" id="tog-{{ ch }}" {% if is_on %}checked{% endif %}
+             onchange="sendCmd({{ ch }}, this.checked)">
+      <span class="tog-track"><span class="tog-thumb"></span></span>
+    </label>
+    <span class="tog-label" id="tlabel-{{ ch }}">{% if is_on %}ВКЛ{% else %}ВЫКЛ{% endif %}</span>
   </div>
   <div class="device-state">
-    <span class="device-dot {% if info.state == true %}on{% elif info.state == false %}off{% endif %}"></span>
-    <span class="device-label">устройство: {% if info.state == true %}вкл{% elif info.state == false %}выкл{% else %}—{% endif %}</span>
+    <span class="device-dot {% if info.state == true %}on{% elif info.state == false %}off{% endif %}" id="dot-{{ ch }}"></span>
+    <span class="device-label" id="dlabel-{{ ch }}">устройство: {% if info.state == true %}вкл{% elif info.state == false %}выкл{% else %}—{% endif %}</span>
   </div>
 </div>
 {% endfor %}
 </div>
 
-<div class="ts">{{ now }}</div>
+<div class="ts" id="ts">{{ now }}</div>
+
+<script>
+const _pollTimer = {};
+
+async function sendCmd(ch, on) {
+  const label = document.getElementById('tlabel-' + ch);
+  if (label) label.textContent = on ? 'ВКЛ' : 'ВЫКЛ';
+  try {
+    const body = {}; body['ch' + ch] = on;
+    await fetch('/set', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+  } catch(e) {}
+  [500, 1000, 1500].forEach(ms => setTimeout(refreshState, ms));
+  clearInterval(_pollTimer.passive);
+  _pollTimer.passive = setInterval(refreshState, 5000);
+}
+
+async function refreshState() {
+  try {
+    const data = await fetch('/state').then(r => r.json());
+    for (const [key, val] of Object.entries(data)) {
+      const ch = key.replace('ch', '');
+      const dot = document.getElementById('dot-' + ch);
+      const lbl = document.getElementById('dlabel-' + ch);
+      if (dot) dot.className = 'device-dot' + (val === true ? ' on' : val === false ? ' off' : '');
+      if (lbl) lbl.textContent = 'устройство: ' + (val === true ? 'вкл' : val === false ? 'выкл' : '—');
+    }
+    const ts = document.getElementById('ts');
+    if (ts) ts.textContent = new Date().toLocaleTimeString('ru-RU');
+  } catch(e) {}
+}
+
+_pollTimer.passive = setInterval(refreshState, 5000);
+</script>
 {% endblock %}
