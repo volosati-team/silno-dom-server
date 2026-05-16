@@ -18,6 +18,18 @@ silno-dom-server/
       config.html
 ```
 
+## Установка (Windows + WSL Debian)
+
+Запускать от **Administrator** в PowerShell:
+
+```powershell
+git clone https://github.com/volosati-team/silno-dom-server "$env:TEMP\silno-dom-server"
+powershell -ExecutionPolicy Bypass -File "$env:TEMP\silno-dom-server\install.ps1"
+```
+
+`install.ps1` сделает всё: установит пакеты в WSL, создаст пользователя `mqtt-silno`,
+зарегистрирует автозапуск в Task Scheduler.
+
 ## Зависимости
 
 Python 3.11+, Mosquitto 2.x.
