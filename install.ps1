@@ -1,17 +1,17 @@
-# install.ps1 — полная установка silno-dom-server
-# Запускать от Administrator один раз.
+# install.ps1 - full silno-dom-server setup
+# Run as Administrator once.
 #
-# Использование:
+# Usage:
 #   powershell -ExecutionPolicy Bypass -File install.ps1
 #
-# Что делает:
-#   0. Останавливает и отключает Windows-сервис Mosquitto (если установлен)
-#   1. Ставит mosquitto, python3, git в WSL Debian
-#   2. Создаёт WSL-пользователя mqtt-silno
-#   3. Клонирует репо в /home/mqtt-silno/silno-dom-server
-#   4. Устанавливает Python-зависимости
-#   5. Создаёт .env из шаблона
-#   6. Регистрирует задачу в Task Scheduler (автозапуск при логоне)
+# Steps:
+#   0. Stop and disable Windows Mosquitto service (if installed)
+#   1. Install mosquitto, python3, git, cloudflared in WSL Debian
+#   2. Create WSL user mqtt-silno
+#   3. Clone repo to /home/mqtt-silno/silno-dom-server
+#   4. Install Python dependencies
+#   5. Create .env from template
+#   6. Register Task Scheduler task (autostart at logon)
 
 param(
     [string]$WslDistro = "Debian",
@@ -24,14 +24,12 @@ param(
 $ErrorActionPreference = "Stop"
 
 function W([string]$cmd) {
-    # Запустить bash-команду в WSL как root
     $result = wsl.exe -d $WslDistro -- bash -c $cmd
     if ($LASTEXITCODE -ne 0) { throw "WSL command failed: $cmd" }
     return $result
 }
 
 function WU([string]$cmd) {
-    # Запустить bash-команду в WSL как mqtt-silno
     $result = wsl.exe -d $WslDistro -u $MqttUser -- bash -c $cmd
     if ($LASTEXITCODE -ne 0) { throw "WSL user command failed: $cmd" }
     return $result
@@ -42,48 +40,42 @@ Write-Host "=== silno-dom-server install ===" -ForegroundColor Yellow
 Write-Host "Distro: $WslDistro  User: $MqttUser  Repo: $RepoDir"
 Write-Host ""
 
-# 0. Убить Windows Mosquitto (если есть)
+# 0. Stop Windows Mosquitto
 Write-Host "[0/6] Windows Mosquitto service..." -ForegroundColor Cyan
 $svc = Get-Service -Name "mosquitto" -ErrorAction SilentlyContinue
 if ($svc) {
     if ($svc.Status -eq "Running") {
         Stop-Service -Name "mosquitto" -Force
-        Write-Host "  остановлен"
+        Write-Host "  stopped"
     }
     Set-Service -Name "mosquitto" -StartupType Disabled
-    Write-Host "  автозапуск отключён"
+    Write-Host "  autostart disabled"
 } else {
-    Write-Host "  сервис не найден, пропуск"
+    Write-Host "  service not found, skip"
 }
 
-# 1. Пакеты + cloudflared
-Write-Host "[1/6] Установка пакетов (apt)..." -ForegroundColor Cyan
+# 1. Packages + cloudflared
+Write-Host "[1/6] Installing packages (apt)..." -ForegroundColor Cyan
 W "apt-get update -q && apt-get install -y mosquitto python3 python3-pip git curl"
-W @"
-if ! command -v cloudflared &>/dev/null; then
-  curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
-  echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared bookworm main' | tee /etc/apt/sources.list.d/cloudflared.list
-  apt-get update -q && apt-get install -y cloudflared
-fi
-"@
+W "command -v cloudflared >/dev/null 2>&1 || (curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null && echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared bookworm main' | tee /etc/apt/sources.list.d/cloudflared.list && apt-get update -q && apt-get install -y cloudflared)"
 
-# 2. Пользователь
-Write-Host "[2/6] Пользователь $MqttUser..." -ForegroundColor Cyan
+# 2. User
+Write-Host "[2/6] User $MqttUser..." -ForegroundColor Cyan
 W "id $MqttUser >/dev/null 2>&1 || useradd -m -s /bin/bash $MqttUser"
 
-# 3. Клон / pull
-Write-Host "[3/6] Репо..." -ForegroundColor Cyan
+# 3. Clone / pull
+Write-Host "[3/6] Repo..." -ForegroundColor Cyan
 W "if [ -d '$RepoDir/.git' ]; then sudo -u $MqttUser git -C '$RepoDir' pull --ff-only; else sudo -u $MqttUser git clone '$RepoUrl' '$RepoDir'; fi"
 
-# 4. Python зависимости
+# 4. Python deps
 Write-Host "[4/6] Python deps..." -ForegroundColor Cyan
 WU "pip3 install --user -q -r $RepoDir/requirements.txt"
 
 # 5. .env
-Write-Host "[5/6] Конфиг (.env)..." -ForegroundColor Cyan
-W "[ -f '$RepoDir/.env' ] || (sudo -u $MqttUser cp '$RepoDir/.env.example' '$RepoDir/.env' && chmod 600 '$RepoDir/.env')"
+Write-Host "[5/6] Config (.env)..." -ForegroundColor Cyan
+W "if [ ! -f '$RepoDir/.env' ]; then sudo -u $MqttUser cp '$RepoDir/.env.example' '$RepoDir/.env' && chmod 600 '$RepoDir/.env'; fi"
 Write-Host ""
-Write-Host "  ! Отредактируй пароль и IP MOiO:" -ForegroundColor Yellow
+Write-Host "  ! Edit password and MOiO IP:" -ForegroundColor Yellow
 Write-Host "    wsl -d $WslDistro -u $MqttUser nano $RepoDir/.env"
 Write-Host ""
 
@@ -113,13 +105,13 @@ Register-ScheduledTask `
     -Trigger $trigger `
     -Settings $settings `
     -Principal $principal `
-    -Description "silno-dom-server: Mosquitto + MQTT bridge + web UI (автозапуск)" | Out-Null
+    -Description "silno-dom-server: Mosquitto + MQTT bridge + web UI" | Out-Null
 
 Write-Host ""
-Write-Host "=== Готово! ===" -ForegroundColor Green
+Write-Host "=== Done! ===" -ForegroundColor Green
 Write-Host ""
-Write-Host "Запустить прямо сейчас (не ждать перезагрузки):"
+Write-Host "Start now (no reboot needed):"
 Write-Host "  Start-ScheduledTask -TaskName '$TaskName'" -ForegroundColor White
 Write-Host ""
-Write-Host "Веб-панель: http://localhost:8080"
-Write-Host "Остановить: wsl -d $WslDistro -u $MqttUser bash $RepoDir/stop.sh"
+Write-Host "Web panel: http://localhost:8080"
+Write-Host "Stop: wsl -d $WslDistro -u $MqttUser bash $RepoDir/stop.sh"
