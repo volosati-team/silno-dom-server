@@ -56,9 +56,10 @@ h2{font-size:.7rem;font-weight:700;letter-spacing:.15em;text-transform:uppercase
 .toggle-switch input{opacity:0;width:0;height:0;position:absolute}
 .tog-track{position:absolute;inset:0;background:var(--off);border-radius:13px;transition:.25s}
 .toggle-switch input:checked~.tog-track{background:var(--accent)}
-.tog-thumb{position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.25s;pointer-events:none}
+.tog-thumb{position:absolute;width:20px;height:20px;left:3px;top:3px;background:#fff;border-radius:50%;border:2px solid rgba(0,0,0,0.25);transition:.25s;pointer-events:none}
 .toggle-switch input:checked~.tog-track .tog-thumb{transform:translateX(24px)}
-.tog-label{font-size:.85rem;font-weight:700;letter-spacing:.05em;color:var(--text2);min-width:40px}
+.warn-line{font-size:.62rem;color:#f87171;letter-spacing:.04em;margin-top:4px;display:none}
+.warn-line.visible{display:block}
 
 pre{font-size:.75rem;line-height:1.6;color:var(--text2);white-space:pre-wrap;word-break:break-all}
 </style>

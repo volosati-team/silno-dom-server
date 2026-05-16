@@ -9,21 +9,21 @@
 
 <div class="light-grid">
 {% for ch, info in lights.items() %}
-{% set is_on = (info.cmd == true) if (info.cmd is not none) else (info.state == true) %}
-<div class="light-card">
+<div class="light-card" id="card-{{ ch }}">
   <div class="light-name">{{ info.name }}</div>
   <div class="toggle-wrap">
     <label class="toggle-switch">
-      <input type="checkbox" id="tog-{{ ch }}" {% if is_on %}checked{% endif %}
+      <input type="checkbox" id="tog-{{ ch }}"
+             {% if info.state == true %}checked{% endif %}
              onchange="sendCmd({{ ch }}, this.checked)">
       <span class="tog-track"><span class="tog-thumb"></span></span>
     </label>
-    <span class="tog-label" id="tlabel-{{ ch }}">{% if is_on %}ВКЛ{% else %}ВЫКЛ{% endif %}</span>
   </div>
   <div class="device-state">
     <span class="device-dot {% if info.state == true %}on{% elif info.state == false %}off{% endif %}" id="dot-{{ ch }}"></span>
-    <span class="device-label" id="dlabel-{{ ch }}">устройство: {% if info.state == true %}вкл{% elif info.state == false %}выкл{% else %}—{% endif %}</span>
+    <span class="device-label" id="dlabel-{{ ch }}">{% if info.state == true %}вкл{% elif info.state == false %}выкл{% else %}—{% endif %}</span>
   </div>
+  <div class="warn-line" id="warn-{{ ch }}"></div>
 </div>
 {% endfor %}
 </div>
@@ -31,16 +31,63 @@
 <div class="ts" id="ts">{{ now }}</div>
 
 <script>
+const chState = {};
+const chPending = {};
 const _pollTimer = {};
 
+{% for ch, info in lights.items() %}
+chState[{{ ch }}] = {{ 'true' if info.state == true else ('false' if info.state == false else 'null') }};
+{% endfor %}
+
+function applyToggle(ch, val) {
+  const tog = document.getElementById('tog-' + ch);
+  if (tog && val !== null) tog.checked = (val === true);
+}
+
+function updateDeviceIndicator(ch, val) {
+  const dot = document.getElementById('dot-' + ch);
+  const lbl = document.getElementById('dlabel-' + ch);
+  if (dot) dot.className = 'device-dot' + (val === true ? ' on' : val === false ? ' off' : '');
+  if (lbl) lbl.textContent = val === true ? 'вкл' : val === false ? 'выкл' : '—';
+}
+
+function showWarn(ch, msg) {
+  const w = document.getElementById('warn-' + ch);
+  if (w) { w.textContent = msg; w.classList.add('visible'); }
+  setTimeout(() => clearWarn(ch), 5000);
+}
+
+function clearWarn(ch) {
+  const w = document.getElementById('warn-' + ch);
+  if (w) w.classList.remove('visible');
+}
+
 async function sendCmd(ch, on) {
-  const label = document.getElementById('tlabel-' + ch);
-  if (label) label.textContent = on ? 'ВКЛ' : 'ВЫКЛ';
+  clearWarn(ch);
+  chPending[ch] = on;
+
   try {
     const body = {}; body['ch' + ch] = on;
     await fetch('/set', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-  } catch(e) {}
-  [500, 1000, 1500].forEach(ms => setTimeout(refreshState, ms));
+  } catch(e) {
+    applyToggle(ch, chState[ch]);
+    delete chPending[ch];
+    showWarn(ch, '⚠ Нет связи');
+    return;
+  }
+
+  // Fast polls after command
+  [500, 1000, 1500, 3000].forEach(ms => setTimeout(refreshState, ms));
+
+  // Timeout: snap back if device didn't confirm
+  setTimeout(() => {
+    if (chPending[ch] !== undefined) {
+      applyToggle(ch, chState[ch]);
+      delete chPending[ch];
+      showWarn(ch, '⚠ Нет ответа от устройства');
+    }
+  }, 3500);
+
   clearInterval(_pollTimer.passive);
   _pollTimer.passive = setInterval(refreshState, 5000);
 }
@@ -49,11 +96,22 @@ async function refreshState() {
   try {
     const data = await fetch('/state').then(r => r.json());
     for (const [key, val] of Object.entries(data)) {
-      const ch = key.replace('ch', '');
-      const dot = document.getElementById('dot-' + ch);
-      const lbl = document.getElementById('dlabel-' + ch);
-      if (dot) dot.className = 'device-dot' + (val === true ? ' on' : val === false ? ' off' : '');
-      if (lbl) lbl.textContent = 'устройство: ' + (val === true ? 'вкл' : val === false ? 'выкл' : '—');
+      const ch = parseInt(key.replace('ch', ''));
+      if (val !== null) chState[ch] = val;
+      updateDeviceIndicator(ch, val);
+
+      if (chPending[ch] !== undefined) {
+        if (val !== null && (val === true) === chPending[ch]) {
+          // Device confirmed the command
+          delete chPending[ch];
+          clearWarn(ch);
+          applyToggle(ch, val);
+        }
+        // else: still waiting, keep optimistic position
+      } else {
+        // No pending: toggle always follows device state
+        applyToggle(ch, val);
+      }
     }
     const ts = document.getElementById('ts');
     if (ts) ts.textContent = new Date().toLocaleTimeString('ru-RU');
