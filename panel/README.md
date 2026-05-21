@@ -54,3 +54,7 @@ API (all under `/api/*`, CORS `*`):
 - `POST /api/dbg-log` — append a client debug-log entry.
 - `GET  /api/dbg-log/recent` — last 30 entries, newest first.
 - `GET  /healthz` — `{ok: true, service: "panel"}`.
+
+## TODO
+
+- **Switch to HTTPS before docker migration.** Currently the panel serves over plain HTTP on `:8081`. Before containerising this service, terminate TLS in front of it (e.g. Caddy or nginx in the same compose stack) so all media-panel traffic is encrypted at the LAN edge. Required for token-auth, SC OAuth, and future Yandex/Spotify integrations that may refuse cleartext callbacks.
