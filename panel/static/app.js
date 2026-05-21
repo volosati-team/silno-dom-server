@@ -1,3 +1,25 @@
+// ============== TOUCH POLICY: single-finger only ==============
+// Owner asked to disable multi-touch on the kiosk panel. One-finger taps and
+// drags only. No pinch-zoom, no double-tap zoom, no two-finger gestures.
+// viewport meta already pins scale; the listeners below kill what some
+// browsers still permit despite the meta.
+(function(){
+  // touchstart / touchmove with >=2 fingers → swallow.
+  function multiTouchGuard(e){
+    if (e.touches && e.touches.length > 1) {
+      e.preventDefault();
+    }
+  }
+  document.addEventListener('touchstart', multiTouchGuard, { passive: false });
+  document.addEventListener('touchmove',  multiTouchGuard, { passive: false });
+  // iOS Safari pinch gesture events — fire even if touch* are prevented.
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach(function(ev){
+    document.addEventListener(ev, function(e){ e.preventDefault(); });
+  });
+  // Kill double-tap zoom: dblclick → preventDefault.
+  document.addEventListener('dblclick', function(e){ e.preventDefault(); }, { passive: false });
+})();
+
 // ============== INLINE CONSOLE (runs first) ==============
 (function(){
   var body = null;
