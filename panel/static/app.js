@@ -501,7 +501,13 @@ async function scLoadInWidget(url, autoplay = true) {
   if (autoplay) pauseYT();
   if (autoplay) localStorage.setItem('sc_last_url', url);
   if (scWidget) {
-    scWidget.load(url, { auto_play: autoplay, show_comments: false, show_reposts: false, show_teaser: false });
+    // SC Widget.load() ignores auto_play on mobile (browser autoplay policy).
+    // Workaround: pass an after-load callback that explicitly calls play().
+    scWidget.load(url, { auto_play: autoplay, show_comments: false, show_reposts: false, show_teaser: false }, function() {
+      if (autoplay) {
+        try { scWidget.play(); } catch (e) { console.warn('SC play() failed:', e); }
+      }
+    });
     return;
   }
   const enc = encodeURIComponent(url);
