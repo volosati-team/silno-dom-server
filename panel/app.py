@@ -242,7 +242,8 @@ def _serve_static(filename: str, media_type: Optional[str] = None) -> Response:
     path = STATIC_DIR / filename
     if not path.is_file():
         raise HTTPException(status_code=404, detail="not found")
-    return FileResponse(str(path), media_type=media_type)
+    headers = {"Cache-Control": "no-cache, must-revalidate"}
+    return FileResponse(str(path), media_type=media_type, headers=headers)
 
 
 # ---------------------------------------------------------------------------
