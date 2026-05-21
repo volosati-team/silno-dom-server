@@ -167,7 +167,7 @@ function updateDot(ch, val) {
 async function moioSet(ch, val) {
   chPending[ch] = val;
   try {
-    await fetch('/api/set', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [ch]: val }) });
+    await fetch(`${location.protocol}//${location.hostname}:8080/set`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [ch]: val }) });
   } catch(e) {
     applySwitch(ch, chState[ch] ?? null);
     delete chPending[ch];
@@ -184,7 +184,7 @@ async function moioSet(ch, val) {
 
 async function pollState() {
   try {
-    const r = await fetch('/api/state');
+    const r = await fetch(`${location.protocol}//${location.hostname}:8080/state`);
     if (!r.ok) return;
     const d = await r.json();
     for (const [key, val] of Object.entries(d)) {

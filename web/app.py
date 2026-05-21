@@ -19,6 +19,7 @@ import paho.mqtt.client as mqtt
 from fastapi import FastAPI, Request, Response, Form, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # ─── CONFIG ────────────────────────────────────────────────────────────────
@@ -43,6 +44,14 @@ USERS: dict[str, str] = {
 # ────────────────────────────────────────────────────────────────────────────
 
 app = FastAPI(title="silno-dom server")
+
+# CORS: allow cross-origin requests from the media panel (different port)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 
 # ─── STATE ─────────────────────────────────────────────────────────────────
