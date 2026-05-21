@@ -1,3 +1,59 @@
+// ============== INLINE CONSOLE (runs first) ==============
+(function(){
+  var body = null;
+  function ready(cb){ if (document.readyState !== 'loading') cb(); else document.addEventListener('DOMContentLoaded', cb); }
+  ready(function(){
+    body = document.getElementById('console-body');
+    if (!body) return;
+    drain();
+  });
+  var queue = [];
+  function ts(){
+    var d = new Date(); var p = function(n){return n<10?'0'+n:''+n;};
+    return p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+  }
+  function fmt(arg){
+    if (arg === null) return 'null';
+    if (arg === undefined) return 'undefined';
+    if (typeof arg === 'object') { try { return JSON.stringify(arg); } catch(e){ return String(arg); } }
+    return String(arg);
+  }
+  function append(level, parts){
+    var text = ts()+' '+parts.map(fmt).join(' ');
+    if (!body){ queue.push([level, text]); return; }
+    var div = document.createElement('div');
+    div.className = 'log-line log-'+level;
+    div.textContent = text;
+    body.appendChild(div);
+    while (body.children.length > 300) body.removeChild(body.firstChild);
+    body.scrollTop = body.scrollHeight;
+  }
+  function drain(){ queue.forEach(function(q){ append(q[0], [q[1]]); }); queue.length = 0; }
+  var orig = { log: console.log, warn: console.warn, error: console.error, info: console.info };
+  console.log   = function(){ append('info',  Array.prototype.slice.call(arguments)); orig.log.apply(console, arguments); };
+  console.info  = function(){ append('info',  Array.prototype.slice.call(arguments)); orig.info.apply(console, arguments); };
+  console.warn  = function(){ append('warn',  Array.prototype.slice.call(arguments)); orig.warn.apply(console, arguments); };
+  console.error = function(){ append('error', Array.prototype.slice.call(arguments)); orig.error.apply(console, arguments); };
+  window.addEventListener('error', function(e){ append('error', ['JS error:', e.message, 'at', e.filename+':'+e.lineno]); });
+  window.addEventListener('unhandledrejection', function(e){ append('error', ['Unhandled rejection:', String(e.reason)]); });
+  var origFetch = window.fetch;
+  window.fetch = function(){
+    var url = typeof arguments[0] === 'string' ? arguments[0] : (arguments[0] && arguments[0].url) || '';
+    var method = (arguments[1] && arguments[1].method) || 'GET';
+    append('net', ['→', method, url]);
+    return origFetch.apply(window, arguments).then(function(r){
+      append('net', ['←', r.status, method, url]);
+      return r;
+    }).catch(function(e){
+      append('error', ['✖', method, url, String(e)]);
+      throw e;
+    });
+  };
+  window._lisaClearConsole = function(){ if (body) body.innerHTML = ''; };
+  window._lisaToggleConsole = function(){ var p = document.getElementById('console-pane'); if (p) p.classList.toggle('hidden'); };
+  window._lisaShowConsole = function(){ var p = document.getElementById('console-pane'); if (p) p.classList.remove('hidden'); };
+})();
+
 // ── Server-side error/log uploader for old browsers (Chrome 72 etc.) ─────────
 (function() {
   var queue = [];
@@ -754,6 +810,7 @@ function detectService(url) {
   if (/youtube\.com|youtu\.be/.test(url)) return 'youtube';
   if (/soundcloud\.com/.test(url)) return 'soundcloud';
   if (/spotify\.com/.test(url)) return 'spotify';
+  if (/music\.yandex\.(ru|com|by|kz|uz)/.test(url)) return 'yandex_music';
   return null;
 }
 
@@ -979,6 +1036,22 @@ function loadSavedItem(item) {
     setMediaTab(2);
     const embedUrl = item.url.replace('open.spotify.com/', 'open.spotify.com/embed/');
     document.getElementById('sp-frame').src = embedUrl + (embedUrl.includes('?') ? '&' : '?') + 'utm_source=generator&theme=0';
+  } else if (item.service === 'yandex_music' || item.service === 'yandex-music') {
+    setMediaTab(0);
+    if (item.title) document.getElementById('sc-track-title').textContent = cleanTitle(item.title);
+    const trk = item.url.match(/track\/(\d+)/);
+    const alb = item.url.match(/album\/(\d+)/);
+    const frame = document.getElementById('yt-frame');
+    if (trk && alb) {
+      frame.src = 'https://music.yandex.ru/iframe/#track/' + trk[1] + '/' + alb[1];
+    } else if (alb) {
+      frame.src = 'https://music.yandex.ru/iframe/#album/' + alb[1];
+    } else {
+      frame.src = '';
+      console.warn('Yandex Music URL has no track/album ID:', item.url);
+    }
+  } else {
+    console.warn('Unknown service:', item.service, 'for url:', item.url);
   }
 }
 
