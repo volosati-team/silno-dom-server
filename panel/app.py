@@ -691,7 +691,11 @@ async def fallthrough_streaming_proxy(path: str, request: Request):
     }
     body = await request.body()
     try:
-        async with httpx.AsyncClient(timeout=35.0) as client:
+        # trust_env=False so httpx does not route loopback calls through the
+        # host's HTTP_PROXY=http://127.0.0.1:2080 (Throne VPN). NO_PROXY for
+        # IP literals is unreliable across httpx versions; bypassing the env
+        # entirely is the safe call for in-host proxying.
+        async with httpx.AsyncClient(timeout=35.0, trust_env=False) as client:
             r = await client.request(request.method, target, headers=headers, content=body)
     except Exception as exc:
         return JSONResponse({"error": "streaming_unreachable", "detail": str(exc)}, status_code=502)

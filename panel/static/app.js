@@ -1076,11 +1076,10 @@ document.addEventListener('mousemove', e => { dragMove(e.clientX, e.clientY); })
 document.addEventListener('mouseup', dragEnd);
 
 // ─── NATIVE AUDIO SHIM (yt-dlp resolver -> <audio>) ────────────────────────
-// The streaming service lives on a sibling port (:8083). We call it directly
-// instead of via panel proxy: WSL2+Throne intercepts loopback inside the host
-// and returns 502 on any same-host proxy, but external LAN clients reach
-// :8083 fine. CORS is permissive on the resolver (allow_origins=*).
-const STREAM_BASE = location.protocol + '//' + location.hostname + ':8083';
+// Resolver runs on a sibling port (:8083). Kiosk hits a same-origin path on
+// :8080 which panel.app proxies into 127.0.0.1:8083. The proxy must run with
+// trust_env=False because the host has HTTP_PROXY=http://127.0.0.1:2080
+// (Throne) which would otherwise hijack the loopback call and return 502.
 let nativeAudio = null;
 let nativeCurrent = null;     // { url, item, resolved_at, expires_at }
 let nativeReresolveTimer = null;
@@ -1154,7 +1153,7 @@ function nativeStop() {
 
 async function nativeReresolveAndPlay(item, isRetry) {
   try {
-    var r = await fetch(STREAM_BASE + '/api/stream/resolve?url=' + encodeURIComponent(item.url));
+    var r = await fetch('/api/stream/resolve?url=' + encodeURIComponent(item.url));
     if (!r.ok) {
       console.warn('native: resolve http ' + r.status);
       return false;
