@@ -351,6 +351,12 @@ zoneClip.classList.add('open');
 pollState();
 setInterval(pollState, 5000);
 
+// Insert hidden <audio> shim ahead of any user interaction so the very first
+// click can resolve+play in one gesture chain (mobile autoplay policy).
+document.addEventListener('DOMContentLoaded', function() {
+  if (typeof ensureNativeAudio === 'function') ensureNativeAudio();
+});
+
 // ── SoundCloud ────────────────────────────────────────────────────────────────
 const SC_REDIRECT = location.origin + '/';
 let scWidget = null;
@@ -1044,12 +1050,147 @@ document.addEventListener('touchend', dragEnd, { passive: true });
 document.addEventListener('mousemove', e => { dragMove(e.clientX, e.clientY); });
 document.addEventListener('mouseup', dragEnd);
 
+// ─── NATIVE AUDIO SHIM (yt-dlp resolver -> <audio>) ────────────────────────
+// Bromite v108 on the iiyama kiosk cannot play audio from the SC Widget
+// iframe. Plan A: resolve the saved URL through /api/stream/resolve (proxied
+// to streaming/app.py on :8083) and play the direct stream URL via a native
+// <audio> element. Falls back to the iframe path if the resolver fails.
+let nativeAudio = null;
+let nativeCurrent = null;     // { url, item, resolved_at, expires_at }
+let nativeReresolveTimer = null;
+
+function ensureNativeAudio() {
+  if (nativeAudio) return nativeAudio;
+  nativeAudio = document.createElement('audio');
+  nativeAudio.id = 'native-audio';
+  nativeAudio.preload = 'auto';
+  nativeAudio.crossOrigin = 'anonymous';
+  nativeAudio.style.display = 'none';
+  document.body.appendChild(nativeAudio);
+  nativeAudio.addEventListener('play', function() {
+    console.log('native: play');
+  });
+  nativeAudio.addEventListener('error', function() {
+    var err = nativeAudio.error;
+    console.warn('native: error code=' + (err && err.code), 'src=' + nativeAudio.currentSrc);
+    if (nativeCurrent && nativeCurrent.item) {
+      // Stream URL probably expired or 4xx — re-resolve once.
+      nativeReresolveAndPlay(nativeCurrent.item, true);
+    }
+  });
+  nativeAudio.addEventListener('ended', function() {
+    console.log('native: ended');
+    if (typeof savedList !== 'undefined' && savedList.length && currentSavedUrl) {
+      var idx = savedList.findIndex(function(it) { return it.url === currentSavedUrl; });
+      if (idx >= 0 && idx + 1 < savedList.length) {
+        console.log('native: advancing to next saved item idx=' + (idx + 1));
+        loadSavedItem(savedList[idx + 1]);
+      }
+    }
+  });
+  return nativeAudio;
+}
+
+function nativeStop() {
+  if (!nativeAudio) return;
+  try { nativeAudio.pause(); } catch(e) {}
+  nativeAudio.removeAttribute('src');
+  try { nativeAudio.load(); } catch(e) {}
+  nativeCurrent = null;
+  if (nativeReresolveTimer) { clearTimeout(nativeReresolveTimer); nativeReresolveTimer = null; }
+}
+
+async function nativeReresolveAndPlay(item, isRetry) {
+  try {
+    var r = await fetch('/api/stream/resolve?url=' + encodeURIComponent(item.url));
+    if (!r.ok) {
+      console.warn('native: resolve http ' + r.status);
+      return false;
+    }
+    var d = await r.json();
+    if (!d || !d.stream_url) {
+      console.warn('native: resolve no stream_url', d && d.error);
+      return false;
+    }
+    console.log('native: resolve ok', d.title || item.url);
+    var audio = ensureNativeAudio();
+    audio.src = d.stream_url;
+    nativeCurrent = {
+      url: item.url,
+      item: item,
+      resolved_at: Date.now(),
+      expires_at: d.expires_at ? d.expires_at * 1000 : (Date.now() + 240 * 1000),
+    };
+    if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
+    if (d.thumbnail) {
+      var art = document.getElementById('sc-art');
+      if (art) {
+        art.classList.remove('yt-icon');
+        art.style.background = '';
+        art.src = d.thumbnail;
+      }
+    }
+    try {
+      // Must be called synchronously in the click-gesture chain on first hit.
+      var p = audio.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(function(e) { console.warn('native: play() rejected:', e && e.message); });
+      }
+    } catch(e) {
+      console.warn('native: play() threw:', e);
+    }
+    // Schedule a pre-emptive re-resolve ~30s before expiry.
+    if (nativeReresolveTimer) clearTimeout(nativeReresolveTimer);
+    var leadMs = Math.max(30 * 1000, (nativeCurrent.expires_at - Date.now()) - 30 * 1000);
+    nativeReresolveTimer = setTimeout(function() {
+      if (nativeCurrent && nativeCurrent.item === item) {
+        console.log('native: pre-emptive re-resolve');
+        nativeReresolveAndPlay(item, false);
+      }
+    }, leadMs);
+    return true;
+  } catch(e) {
+    console.warn('native: resolve threw:', e && e.message);
+    return false;
+  }
+}
+
+async function tryNativePlay(item) {
+  // Quick host check — skip resolver for services we know it can't help with.
+  var u = (item.url || '').toLowerCase();
+  if (!/soundcloud\.com|snd\.sc|youtube\.com|youtu\.be|music\.yandex\.|spotify\.com/.test(u)) {
+    return false;
+  }
+  ensureNativeAudio();
+  // Silence any iframe player before native takes over.
+  try { pauseYT(); } catch(e) {}
+  try { if (scWidget) scWidget.pause(); } catch(e) {}
+  return await nativeReresolveAndPlay(item, false);
+}
+
 function loadSavedItem(item) {
   console.log('loadSavedItem:', item.service, item.url);
   openMediaPanel();
   hideSavedPanel();
   currentSavedUrl = item.url;
   renderSavedList();
+
+  // Try native audio first. If it succeeds we're done — no iframe needed.
+  // tryNativePlay is async but we kick it off synchronously so the click
+  // gesture flows into audio.play(). Iframe fallbacks run if it returns
+  // false (resolver failure or unsupported host).
+  tryNativePlay(item).then(function(ok) {
+    if (ok) {
+      console.log('native: handled', item.service, item.url);
+      return;
+    }
+    console.log('native: fallback to iframe for', item.service);
+    nativeStop();
+    loadSavedItemIframe(item);
+  });
+}
+
+function loadSavedItemIframe(item) {
   if (item.service === 'youtube') {
     setMediaTab(0);
     // Immediately populate bar from saved item data

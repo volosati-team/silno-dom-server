@@ -666,6 +666,49 @@ async def api_light_state():
 
 
 # ---------------------------------------------------------------------------
+# Streaming proxy for /api/stream/* — forwards to the yt-dlp resolver service
+# on port 8083 so the kiosk can hit a same-origin URL. Kept explicit (not
+# part of the generic fallthrough) because the target backend differs.
+# ---------------------------------------------------------------------------
+
+STREAMING_BACKEND = "http://127.0.0.1:8083"
+
+
+@app.api_route(
+    "/api/stream/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    include_in_schema=False,
+)
+async def fallthrough_streaming_proxy(path: str, request: Request):
+    target = f"{STREAMING_BACKEND}/api/stream/{path}"
+    qs = request.url.query
+    if qs:
+        target = f"{target}?{qs}"
+    headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in ("host", "content-length")
+    }
+    body = await request.body()
+    try:
+        async with httpx.AsyncClient(timeout=35.0) as client:
+            r = await client.request(request.method, target, headers=headers, content=body)
+    except Exception as exc:
+        return JSONResponse({"error": "streaming_unreachable", "detail": str(exc)}, status_code=502)
+    resp_headers = {
+        k: v
+        for k, v in r.headers.items()
+        if k.lower() not in ("content-length", "transfer-encoding", "connection")
+    }
+    return Response(
+        content=r.content,
+        status_code=r.status_code,
+        headers=resp_headers,
+        media_type=r.headers.get("content-type"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Fallthrough proxy for unhandled /api/* paths.
 # Mirrors the old worker.js MOIO fallback: strip "/api" prefix and forward
 # to the light-control FastAPI on port 8080. Used by the panel UI to read
