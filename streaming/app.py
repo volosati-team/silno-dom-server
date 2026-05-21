@@ -117,7 +117,26 @@ def _validate_url(url: str) -> Optional[str]:
 
 def _is_playlist_url(url: str) -> bool:
     low = url.lower()
-    return any(hint in low for hint in PLAYLIST_HINTS)
+    if any(hint in low for hint in PLAYLIST_HINTS):
+        return True
+    # SoundCloud profile/feed URLs — single path segment after the host means
+    # the URL points at a user, not a track. yt-dlp on `soundcloud.com/<user>`
+    # tries to enumerate every upload and times out; treating it as a playlist
+    # routes through --flat-playlist which is fast.
+    try:
+        parsed = urlparse(low)
+    except Exception:
+        return False
+    host = (parsed.hostname or "").lstrip(".")
+    if "soundcloud.com" in host:
+        segments = [s for s in parsed.path.split("/") if s]
+        if len(segments) <= 1:
+            return True
+        if len(segments) == 2 and segments[1] in {
+            "likes", "reposts", "tracks", "popular-tracks", "albums", "stations",
+        }:
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
