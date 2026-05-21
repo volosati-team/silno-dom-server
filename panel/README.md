@@ -58,3 +58,38 @@ API (all under `/api/*`, CORS `*`):
 ## TODO
 
 - **Switch to HTTPS before docker migration.** Currently the panel serves over plain HTTP on `:8081`. Before containerising this service, terminate TLS in front of it (e.g. Caddy or nginx in the same compose stack) so all media-panel traffic is encrypted at the LAN edge. Required for token-auth, SC OAuth, and future Yandex/Spotify integrations that may refuse cleartext callbacks.
+
+## Status (2026-05-21 22:00 MSK)
+
+Layered architecture, both layers are mandatory and independent.
+
+### Layer 1: control + UI (this repo) — WORKING
+
+- DragonFly KV at 127.0.0.1:6379 as the central command bus.
+- `dragonfly_mqtt_bridge.py` translates `light:chN:cmd` PUBLISH events into MQTT `home/light/chN/set` and writes back `light:chN:state` from MOiO MQTT replies.
+- Panel FastAPI on 8080 (main) exposes `/api/light/{state,set}` over DragonFly; serves the kiosk UI.
+- Legacy Jinja light dashboard on 8081 (web/app.py) — kept as fallback, untouched.
+- Light works from phone, tablet, and any LAN client (verified end-to-end through MOiO).
+
+### Layer 2: audio streaming — DEFERRED, mandatory
+
+The panel renders the SoundCloud / YouTube widgets but cannot reliably play audio on the iiyama kiosk (Xiaomi-OUI device on `192.168.31.85`). Bromite v108 on this hardware loads the SC Widget iframe, `widget.load()` returns, the post-load callback fires, but audio playback does not start.
+
+**Required next step:** plug an external Bluetooth receiver into the speakers and pair the phone with it. The phone streams to the receiver; the tablet only serves UI navigation and light control. This is **not optional** and **does not replace** any future WebView upgrade — it is a separate physical layer.
+
+### Tablet WebView upgrade — DEFERRED
+
+Bromite SystemWebView APK is installed on the kiosk, but Android Settings → Developer Options → WebView implementation does not list it — only the default Android System WebView is selectable. Reason unknown (likely signature mismatch or Android 8.1 limitation on non-system-app WebView providers). Path forward not yet determined; the SystemWebView APK is parked in `clck.ru/3Tm5CS` for future attempts.
+
+### Known issues (deferred)
+
+- iOS Safari: `silno.local` and `192.168.31.50:8080/8081` time out from iPhone. Other LAN clients work. Owner explicitly deferred.
+- YouTube playlist auto-generated URLs (`list=RD...`) expire within an hour or two — do not save them.
+- DragonFly v1.38 does not support `notify-keyspace-events "K$"` — connector uses an explicit `light:cmd:set` pubsub channel instead. Use `redis-cli PUBLISH light:cmd:set ch1:true` for manual control, not `SET`.
+- WSL2 mirrored networking + Throne VPN tunnel inside WSL: from within WSL, `curl 127.0.0.1:<port>` and `curl 192.168.31.50:<port>` return `HTTP/1.1 502 Bad Gateway` even when the service is bound and listening. External LAN clients are unaffected. Trust `pgrep` + log lines, not `curl` self-loopback.
+
+### Pre-docker TODO
+
+- HTTPS termination in front of panel (Caddy/nginx in the same compose stack) before containerising — required for token-auth, SC OAuth, future Yandex/Spotify integrations.
+- Pair external BT receiver and document the pairing flow.
+- WebView upgrade investigation — separate task, not blocking panel work.
