@@ -41,6 +41,15 @@ else
     log "bridge pid=$!"
 fi
 
+# DragonFly (Redis-compatible KV) - master state store for light cmd/state
+if pgrep -x dragonfly > /dev/null; then
+    log "dragonfly already running, skip"
+else
+    log "starting dragonfly..."
+    nohup dragonfly --bind 127.0.0.1 --port "${REDIS_PORT:-6379}" --dir /tmp >> logs/dragonfly.log 2>&1 &
+    log "dragonfly pid=$!"
+fi
+
 # Web UI
 if pgrep -f "uvicorn web.app:app" > /dev/null; then
     log "web already running, skip"
@@ -57,6 +66,15 @@ else
     log "starting media panel..."
     nohup python3 -m uvicorn panel.app:app --host 0.0.0.0 --port "${PANEL_PORT:-8081}" >> logs/panel.log 2>&1 &
     log "panel pid=$!"
+fi
+
+# DragonFly <-> MQTT bridge (translates light:chN:cmd keyspace events to MQTT)
+if pgrep -f dragonfly_mqtt_bridge.py > /dev/null; then
+    log "dragonfly bridge already running, skip"
+else
+    log "starting dragonfly bridge..."
+    nohup python3 dragonfly_mqtt_bridge.py >> logs/dragonfly_bridge.log 2>&1 &
+    log "dragonfly bridge pid=$!"
 fi
 
 # CF Tunnel (если cloudflared установлен)

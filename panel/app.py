@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import httpx
+import redis
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
@@ -583,6 +584,80 @@ async def app_js():
 @app.get("/healthz", include_in_schema=False)
 async def healthz():
     return json_response({"ok": True, "service": "panel"})
+
+
+# ---------------------------------------------------------------------------
+# Light control via DragonFly (Redis-compatible KV).
+#
+# Flow:
+#   POST /api/light/set body {"ch1": true, "ch3": false}
+#     -> SET light:ch1:cmd "true", SET light:ch3:cmd "false"
+#     -> dragonfly_mqtt_bridge.py picks up keyspace events and publishes MQTT.
+#   GET /api/light/state
+#     -> MGET light:ch1:state light:ch3:state -> {"ch1": bool|null, "ch3": bool|null}
+#
+# DragonFly is reached via REDIS_URL (default redis://127.0.0.1:6379/0).
+# Tiny payloads, sync client is fine; FastAPI runs it in a threadpool.
+# ---------------------------------------------------------------------------
+
+REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
+LIGHT_CHANNELS = ("ch1", "ch3")
+_REDIS: Optional[redis.Redis] = None
+
+
+def _redis() -> redis.Redis:
+    global _REDIS
+    if _REDIS is None:
+        _REDIS = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=2.0)
+    return _REDIS
+
+
+def _parse_state_value(raw: Optional[str]) -> Optional[bool]:
+    if raw is None:
+        return None
+    v = raw.strip().lower()
+    if v == "true":
+        return True
+    if v == "false":
+        return False
+    return None
+
+
+@app.post("/api/light/set", include_in_schema=False)
+async def api_light_set(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return json_response({"ok": False, "error": "bad_json"}, status=400)
+    if not isinstance(body, dict):
+        return json_response({"ok": False, "error": "bad_body"}, status=400)
+    written = {}
+    try:
+        client = _redis()
+        for ch, val in body.items():
+            if ch not in LIGHT_CHANNELS:
+                continue
+            if not isinstance(val, bool):
+                continue
+            client.set(f"light:{ch}:cmd", "true" if val else "false")
+            written[ch] = val
+    except redis.RedisError as exc:
+        return json_response({"ok": False, "error": "redis_unreachable", "detail": str(exc)}, status=502)
+    if not written:
+        return json_response({"ok": False, "error": "no_valid_channels"}, status=400)
+    return json_response({"ok": True, "written": written})
+
+
+@app.get("/api/light/state", include_in_schema=False)
+async def api_light_state():
+    try:
+        client = _redis()
+        keys = [f"light:{ch}:state" for ch in LIGHT_CHANNELS]
+        values = client.mget(keys)
+    except redis.RedisError as exc:
+        return json_response({"error": "redis_unreachable", "detail": str(exc)}, status=502)
+    out = {ch: _parse_state_value(v) for ch, v in zip(LIGHT_CHANNELS, values)}
+    return json_response(out)
 
 
 # ---------------------------------------------------------------------------
