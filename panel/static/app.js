@@ -494,7 +494,9 @@ function pauseYT() {
 }
 
 async function scLoadInWidget(url, autoplay = true) {
+  console.log('scLoadInWidget(start):', url, 'autoplay=' + autoplay, 'scWidget=' + (scWidget ? 'ok' : 'null'));
   url = await resolveUrl(url);
+  console.log('scLoadInWidget(resolved):', url);
   if (SC_UNSUPPORTED.test(url)) {
     const ph = document.getElementById('sc-placeholder');
     ph.classList.remove('hidden');
@@ -537,16 +539,22 @@ function ytCmd(func, args) {
 }
 
 function scPlayPause() {
+  console.log('scPlayPause: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null') + ' ytPlaying=' + ytPlaying);
   if (activePlayer === 0) { ytPlaying ? ytCmd('pauseVideo') : ytCmd('playVideo'); }
   else if (scWidget) scWidget.toggle();
+  else console.warn('scPlayPause: no handler — activePlayer=' + activePlayer + ' scWidget missing');
 }
 function scPrev() {
+  console.log('scPrev: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null'));
   if (activePlayer === 0) ytCmd('previousVideo');
   else if (scWidget) scWidget.prev();
+  else console.warn('scPrev: no handler');
 }
 function scNext() {
+  console.log('scNext: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null'));
   if (activePlayer === 0) ytCmd('nextVideo');
   else if (scWidget) scWidget.next();
+  else console.warn('scNext: no handler');
 }
 
 document.getElementById('sc-prog').addEventListener('click', e => {
@@ -1022,6 +1030,7 @@ document.addEventListener('mousemove', e => { dragMove(e.clientX, e.clientY); })
 document.addEventListener('mouseup', dragEnd);
 
 function loadSavedItem(item) {
+  console.log('loadSavedItem:', item.service, item.url);
   openMediaPanel();
   hideSavedPanel();
   currentSavedUrl = item.url;
