@@ -495,6 +495,21 @@ function pauseYT() {
 
 async function scLoadInWidget(url, autoplay = true) {
   console.log('scLoadInWidget(start):', url, 'autoplay=' + autoplay, 'scWidget=' + (scWidget ? 'ok' : 'null'));
+  // Sync fast path for autoplay: skip resolveUrl to keep the user-gesture
+  // token alive (Chrome/mobile autoplay policy). Only short on.soundcloud.com
+  // links need redirect-following — pass the rest through immediately.
+  var SC_SHORT = /on\.soundcloud\.com/;
+  if (autoplay && scWidget && !SC_SHORT.test(url)) {
+    console.log('scLoadInWidget(sync-fast-path):', url);
+    document.getElementById('sc-placeholder').classList.add('hidden');
+    scShowBar();
+    pauseYT();
+    try { localStorage.setItem('sc_last_url', url); } catch(e) {}
+    scWidget.load(url, { auto_play: true, show_comments: false, show_reposts: false, show_teaser: false }, function() {
+      try { scWidget.play(); } catch (e) { console.warn('SC play() failed:', e); }
+    });
+    return;
+  }
   url = await resolveUrl(url);
   console.log('scLoadInWidget(resolved):', url);
   if (SC_UNSUPPORTED.test(url)) {
