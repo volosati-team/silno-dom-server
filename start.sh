@@ -50,6 +50,15 @@ else
     log "web pid=$!"
 fi
 
+# Media panel
+if pgrep -f "uvicorn panel.app:app" > /dev/null; then
+    log "panel already running, skip"
+else
+    log "starting media panel..."
+    nohup python3 -m uvicorn panel.app:app --host 0.0.0.0 --port "${PANEL_PORT:-8081}" >> logs/panel.log 2>&1 &
+    log "panel pid=$!"
+fi
+
 # CF Tunnel (если cloudflared установлен)
 if command -v cloudflared &>/dev/null; then
     if pgrep -x cloudflared > /dev/null; then

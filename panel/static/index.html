@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>СИЛЬНО ДОМ</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='1534 -129 1039 1039'><rect x='1534' y='-129' width='1039' height='1039' fill='%23000'/><path fill='%23fff500' d='M1821.6281 780.5911C1899.2181 780.5911 1976.8079 780.5911 2054.3978 780.5911C2225.1906 780.5911 2285.6448 705.6983 2285.6448 591.5219C2285.6448 590.5298 2285.6448 589.5377 2285.6448 588.5453C2285.6448 478.7985 2214.614 410.5854 2064.2151 410.5854C2050.6132 410.5854 2037.0113 410.5854 2023.4095 410.5854C2023.4095 357.1966 2023.4095 303.8079 2023.4095 250.4191C1956.149 167.2802 1888.8886 84.1411 1821.6281 1.002C1821.6281 260.8651 1821.6281 520.728 1821.6281 780.5911ZM2023.4095 638.9665C2023.4095 607.8211 2023.4095 576.6757 2023.4095 545.5305C2029.4597 545.5305 2035.51 545.5305 2041.5602 545.5305C2077.837 545.5305 2095.9664 561.1219 2095.9664 592.2591C2095.9664 593.243 2095.9664 594.2269 2095.9664 595.2108C2095.9664 625.6144 2078.5788 638.9665 2042.2984 638.9665C2036.0022 638.9665 2029.7057 638.9665 2023.4095 638.9665Z'/></svg>">
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<div id="header">
+  <div id="logo">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3520 1031" height="22" fill="#fff500">
+      <path d="M298.007 790.97C447.6443 790.97 556.4675 713.8626 562.5153 569.265C495.5057 569.265 428.4962 569.265 361.4866 569.265C356.9542 613.7577 329.7475 633.038 292.7165 633.038C240.5719 633.038 213.3644 592.996 213.3644 518.1033C213.3644 516.1273 213.3644 514.1512 213.3644 512.175C213.3644 435.0571 241.3268 397.9809 288.9387 397.9809C323.7021 397.9809 344.8636 421.7085 347.1291 461.7504C416.6567 461.7504 486.1841 461.7504 555.7115 461.7504C542.1107 308.9991 443.1083 242.2631 288.1834 242.2631C124.9437 242.2631 1.0047 346.8154 1.0047 512.9121C1.0047 514.8882 1.0047 516.8644 1.0047 518.8405C1.0047 681.2479 92.4484 790.97 298.007 790.97Z"/>
+      <path d="M811.4573 780.5769C858.0612 693.8193 904.6651 607.0617 951.2689 520.3041C951.2689 607.0617 951.2689 693.8193 951.2689 780.5769C1018.2762 780.5769 1085.2834 780.5769 1152.2907 780.5769C1152.2907 603.8529 1152.2907 427.1287 1152.2907 250.4047C1087.0474 250.4047 1021.8042 250.4047 956.5609 250.4047C909.957 337.1642 863.3532 423.9237 816.7493 510.6833C816.7493 423.9237 816.7493 337.1642 816.7493 250.4047C749.4889 250.4047 682.2284 250.4047 614.968 250.4047C614.968 427.1287 614.968 603.8529 614.968 780.5769C680.4645 780.5769 745.9609 780.5769 811.4573 780.5769Z"/>
+      <path d="M1446.38 585.5582C1452.4242 531.4448 1454.6923 462.4769 1456.2041 400.9328C1481.8994 400.9328 1507.5948 400.9328 1533.2901 400.9328C1533.2901 610.6224 1533.2901 820.312 1533.2901 1030.0018C1600.2997 946.8601 1667.3092 863.7186 1734.3188 780.5769C1734.3188 603.8529 1734.3188 427.1287 1734.3188 250.4047C1587.4538 250.4047 1440.5886 250.4047 1293.7237 250.4047C1293.7237 250.4047 1292.2082 457.2857 1283.8959 535.1337C1277.0954 604.8387 1265.0032 641.1918 1231.7505 641.1918C1216.6377 641.1918 1207.5695 636.0006 1207.5695 636.0006C1207.5695 684.1926 1207.5695 732.3847 1207.5695 780.5769C1207.5695 780.5769 1236.2865 790.956 1280.1193 790.956C1390.4546 790.956 1433.5317 707.9202 1446.38 585.5582Z"/>
+      <path d="M1821.6281 780.5911C1899.2181 780.5911 1976.8079 780.5911 2054.3978 780.5911C2225.1906 780.5911 2285.6448 705.6983 2285.6448 591.5219C2285.6448 590.5298 2285.6448 589.5377 2285.6448 588.5453C2285.6448 478.7985 2214.614 410.5854 2064.2151 410.5854C2050.6132 410.5854 2037.0113 410.5854 2023.4095 410.5854C2023.4095 357.1966 2023.4095 303.8079 2023.4095 250.4191C1956.149 167.2802 1888.8886 84.1411 1821.6281 1.002C1821.6281 260.8651 1821.6281 520.728 1821.6281 780.5911ZM2023.4095 638.9665C2023.4095 607.8211 2023.4095 576.6757 2023.4095 545.5305C2029.4597 545.5305 2035.51 545.5305 2041.5602 545.5305C2077.837 545.5305 2095.9664 561.1219 2095.9664 592.2591C2095.9664 593.243 2095.9664 594.2269 2095.9664 595.2108C2095.9664 625.6144 2078.5788 638.9665 2042.2984 638.9665C2036.0022 638.9665 2029.7057 638.9665 2023.4095 638.9665Z"/>
+      <path d="M2341.9339 780.5769C2409.1944 780.5769 2476.4548 780.5769 2543.7153 780.5769C2543.7153 715.5707 2543.7153 650.5645 2543.7153 585.5582C2584.7812 585.5582 2625.8468 585.5582 2666.9127 585.5582C2666.9127 650.5645 2666.9127 715.5707 2666.9127 780.5769C2733.9187 780.5769 2800.9249 780.5769 2867.9309 780.5769C2867.9309 603.8529 2867.9309 427.1287 2867.9309 250.4047C2800.9249 250.4047 2733.9187 250.4047 2666.9127 250.4047C2666.9127 311.4558 2666.9127 372.507 2666.9127 433.5581C2625.8468 433.5581 2584.7812 433.5581 2543.7153 433.5581C2543.7153 372.507 2543.7153 311.4558 2543.7153 250.4047C2476.4548 250.4047 2409.1944 250.4047 2341.9339 250.4047C2341.9339 427.1287 2341.9339 603.8529 2341.9339 780.5769Z"/>
+      <path d="M3216.702 790.97C3400.3537 790.97 3519.0047 683.4625 3519.0047 513.6526C3519.0047 511.6766 3519.0047 509.7005 3519.0047 507.7243C3519.0047 334.9503 3389.0175 242.2631 3221.2486 242.2631C3058.0085 242.2631 2925.7604 345.3322 2925.7604 512.9121C2925.7604 514.8882 2925.7604 516.8644 2925.7604 518.8405C2925.7604 683.4625 3034.5729 790.97 3216.702 790.97ZM3221.9904 636.7517C3166.8211 636.7517 3135.8539 598.1874 3135.8539 518.1033C3135.8539 516.1273 3135.8539 514.1512 3135.8539 512.175C3135.8539 431.3469 3170.6081 395.7521 3221.2486 395.7521C3272.6309 395.7521 3308.9076 430.6064 3308.9076 512.175C3308.9076 514.1512 3308.9076 516.1273 3308.9076 518.1033C3308.9076 595.2108 3274.8954 636.7517 3221.9904 636.7517Z"/>
+    </svg>
+  </div>
+  <div id="header-clock"></div>
+  <button id="menu-btn"><span></span><span></span><span></span></button>
+</div>
+
+<!-- ZONE TABS -->
+<div id="zone-tabs">
+  <div class="ztab" data-zone="yard">Двор</div>
+  <div class="ztab" data-zone="gallery">Галерея</div>
+  <div class="ztab" data-zone="hall">Холл</div>
+  <div class="ztab" data-zone="workshop">Мастерская</div>
+  <div class="ztab" data-zone="basement">Подвал</div>
+</div>
+
+<!-- ZONE CONTENT clip -->
+<div id="zone-clip">
+  <div id="zone-inner">
+  <div id="zone-track">
+
+    <div class="zone-page" id="zone-yard">
+      <div class="ctrl-btn" data-ch="ch1" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Споты</span>
+        <div class="dev-row"><span class="dev-dot"></span><span class="dev-lbl">—</span></div>
+      </div>
+      <div class="ctrl-btn" data-ch="ch3" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Гирлянда</span>
+        <div class="dev-row"><span class="dev-dot"></span><span class="dev-lbl">—</span></div>
+      </div>
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Ворота</span>
+      </div>
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Вентилятор</span>
+      </div>
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Насос</span>
+      </div>
+    </div>
+
+    <div class="zone-page" id="zone-gallery">
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Свет</span>
+      </div>
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Розетка</span>
+      </div>
+    </div>
+
+    <div class="zone-page" id="zone-hall">
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Свет</span>
+      </div>
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Кондей</span>
+      </div>
+    </div>
+
+    <div class="zone-page" id="zone-workshop">
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Свет</span>
+      </div>
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Розетка</span>
+      </div>
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Вентилятор</span>
+      </div>
+    </div>
+
+    <div class="zone-page" id="zone-basement">
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Свет</span>
+      </div>
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Насос</span>
+      </div>
+      <div class="ctrl-btn" data-ch="" onclick="handleCtrlClick(event,this)">
+        <label class="tswitch" onclick="event.stopPropagation()">
+          <input type="checkbox" class="tchk" onchange="handleCtrl(this)">
+          <span class="ttrack"><span class="tthumb"></span></span>
+        </label>
+        <span class="cl">Обогрев</span>
+      </div>
+    </div>
+
+  </div>
+  </div>
+</div>
+
+<!-- MEDIA CONTENT -->
+<div id="media-clip">
+  <div id="media-inner">
+    <div id="media-player">
+      <div id="saved-panel">
+        <div id="saved-panel-hdr">
+          <button id="saved-add-btn" onclick="toggleSavedAdd()" title="Добавить">＋</button>
+          <span id="saved-panel-title">Saved</span>
+        </div>
+        <div id="saved-add-row">
+          <input id="saved-add-input" type="url" placeholder="soundcloud.com · youtube.com · spotify.com" spellcheck="false">
+          <button id="saved-add-ok">▶</button>
+        </div>
+        <div id="saved-edit-bar">
+          <button id="saved-edit-done" onclick="exitSavedEdit()">Готово</button>
+        </div>
+        <div id="saved-list">
+          <div id="saved-empty">Пока пусто.<br>Добавь первый плейлист.</div>
+        </div>
+      </div>
+      <button id="saved-tab" onclick="toggleSavedPanel()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
+      <div id="media-track-wrap">
+      <div id="media-track">
+        <div class="mslide">
+          <iframe id="yt-frame" src="about:blank"
+            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            allowfullscreen></iframe>
+        </div>
+        <div class="mslide" id="sc-slide">
+          <div id="sc-topbar">
+            <div id="sc-user-chip">
+              <img id="sc-avatar" src="" alt="">
+              <span id="sc-username">SoundCloud</span>
+            </div>
+            <button id="sc-likes-toggle" onclick="scToggleLikes()">♡ Likes</button>
+            <button id="sc-connect-btn">Connect</button>
+          </div>
+          <div id="sc-likes-list"></div>
+          <div id="sc-frame-wrap">
+            <iframe id="sc-frame" src="about:blank" allow="autoplay"></iframe>
+            <div id="sc-placeholder">
+              <div id="sc-ph-icon">☁</div>
+              <div>Вставь ссылку SC или подключи аккаунт</div>
+            </div>
+          </div>
+          <div id="sc-searchbar">
+            <input id="sc-url-input" type="url" placeholder="soundcloud.com/...">
+            <button id="sc-go-btn" onclick="scLoadUrl()">▶</button>
+          </div>
+        </div>
+        <div class="mslide">
+          <iframe id="sp-frame" src="about:blank" allow="autoplay; encrypted-media" style="border:0"></iframe>
+        </div>
+        <div class="mslide"><div class="mstub"><div class="mstub-icon">🎶</div>Яндекс.Музыка — скоро</div></div>
+        <div class="mslide"><div class="mstub"><div class="mstub-icon">🎧</div>Deezer — скоро</div></div>
+      </div>
+      </div><!-- /media-track-wrap -->
+    </div>
+  </div>
+</div>
+
+<!-- SC Persistent Player Bar (always visible) -->
+<div id="sc-controls">
+  <button id="sc-expand-btn" onclick="toggleMediaPanel()" title="Открыть плеер"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
+  <div id="sc-ctrl-left">
+    <button class="sc-btn" id="sc-shuffle" onclick="scToggleShuffle()" title="Shuffle">⇄</button>
+    <button class="sc-btn" id="sc-prev" onclick="scPrev()">⏮</button>
+    <button class="sc-btn" id="sc-playpause" onclick="scPlayPause()">▶</button>
+    <button class="sc-btn" id="sc-next" onclick="scNext()">⏭</button>
+    <button class="sc-btn" id="sc-repeat" onclick="scToggleRepeat()" title="Repeat">↻</button>
+  </div>
+  <div id="sc-ctrl-center">
+    <span id="sc-time-cur">0:00</span>
+    <div id="sc-prog"><div id="sc-prog-fill"></div></div>
+    <span id="sc-time-dur">0:00</span>
+  </div>
+  <div id="sc-ctrl-right">
+    <img id="sc-art" src="" alt="">
+    <div id="sc-track-info">
+      <div id="sc-track-title">—</div>
+      <div id="sc-track-artist"></div>
+    </div>
+    <input id="sc-vol" type="range" min="0" max="100" value="80" title="Громкость">
+  </div>
+</div>
+
+
+<!-- Guest QR modal -->
+<div id="guest-qr-modal">
+  <button id="guest-qr-close" onclick="hideGuestQR()">✕</button>
+  <div id="guest-qr-service">ПОДЕЛИТЬСЯ ПЛЕЙЛИСТОМ</div>
+  <img id="guest-qr-img" src="" alt="QR">
+  <div id="guest-qr-hint">Отсканируй QR телефоном</div>
+  <div id="guest-qr-sub">Или вставь ссылку прямо здесь</div>
+  <div id="guest-paste-row">
+    <input id="guest-paste-input" type="url" placeholder="soundcloud.com · youtube.com · spotify.com" spellcheck="false">
+    <button id="guest-paste-ok">▶</button>
+  </div>
+  <div id="guest-qr-wait">
+    <div id="guest-qr-spinner"></div>
+    Ожидаю от телефона...
+  </div>
+</div>
+
+
+<!-- SC QR AUTH MODAL -->
+<div id="sc-qr-modal">
+  <button id="sc-qr-close" onclick="scHideQR()">✕</button>
+  <div id="sc-qr-service">SoundCloud</div>
+
+  <!-- Phase 1: Client ID setup (shown when no client_id stored) -->
+  <div id="sc-qr-setup">
+    <div id="sc-setup-info">Для авторизации нужен Client ID.<br>Создай приложение на SoundCloud — займёт минуту.</div>
+    <a id="sc-setup-link" href="https://soundcloud.com/you/apps" target="_blank">→ soundcloud.com/you/apps</a>
+    <input id="sc-cid-input" type="text" placeholder="Вставь Client ID сюда">
+    <button id="sc-cid-ok">Продолжить</button>
+  </div>
+
+  <!-- Phase 2: QR (shown after client_id is set) -->
+  <div id="sc-qr-content">
+    <img id="sc-qr-img" src="" alt="QR">
+    <div id="sc-qr-title">Отсканируй телефоном</div>
+    <div id="sc-qr-hint">Авторизуйся в SoundCloud</div>
+    <div id="sc-qr-waiting">
+      <div id="sc-qr-spinner"></div>
+      <div id="sc-qr-wait-txt">Ожидаю авторизацию...</div>
+    </div>
+  </div>
+</div>
+
+<!-- MENU -->
+<div id="overlay"></div>
+<nav id="menu">
+  <div class="menu-label">SoundCloud</div>
+  <div id="menu-sc-section">
+    <div id="menu-sc-accounts"></div>
+    <button id="menu-sc-add" onclick="scShowQR(); closeMenu()">
+      <span id="menu-sc-add-icon">＋</span> Присоединить аккаунт
+    </button>
+  </div>
+  <hr class="menu-div">
+  <div class="menu-label">Настройки</div>
+  <div id="menu-form">
+    <input class="minput" id="login-in" type="text" autocomplete="username" placeholder="Логин">
+    <input class="minput" id="pass-in"  type="password" autocomplete="current-password" placeholder="Пароль">
+    <button class="mbtn" onclick="doLogin()">Войти</button>
+    <div id="menu-err"></div>
+  </div>
+  <hr class="menu-div">
+  <div id="menu-logged">
+    <div class="menu-user" id="menu-uname"></div>
+    <a class="mlink" href="/accounts">Аккаунты</a>
+    <a class="mlink" href="/automation">Автоматика</a>
+    <a class="mlink" href="/log">Лог</a>
+    <a class="mlink" href="/system">Система</a>
+    <button id="logout" onclick="doLogout()">Выйти</button>
+  </div>
+</nav>
+
+<script>
+// Debug console — only activate via ?debug=1 in URL, then persists in localStorage
+(function(){
+  try {
+    if (location.search.indexOf('debug=1') !== -1) localStorage.setItem('eruda_on', '1');
+    if (location.search.indexOf('debug=0') !== -1) localStorage.removeItem('eruda_on');
+    if (localStorage.getItem('eruda_on')) {
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/eruda';
+      s.onload = function() { eruda.init(); };
+      document.head.appendChild(s);
+    }
+  } catch(e) {}
+})();
+</script>
+<script src="/app.js"></script>
+</body>
+</html>
