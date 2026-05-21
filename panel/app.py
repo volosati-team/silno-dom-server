@@ -602,6 +602,7 @@ async def healthz():
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
 LIGHT_CHANNELS = ("ch1", "ch3")
+LIGHT_CMD_PUBSUB_CHANNEL = "light:cmd:set"
 _REDIS: Optional[redis.Redis] = None
 
 
@@ -639,7 +640,11 @@ async def api_light_set(request: Request):
                 continue
             if not isinstance(val, bool):
                 continue
-            client.set(f"light:{ch}:cmd", "true" if val else "false")
+            text = "true" if val else "false"
+            # SET stores last-known cmd (audit / read-back).
+            client.set(f"light:{ch}:cmd", text)
+            # PUBLISH triggers the bridge (DragonFly has no SET keyspace events).
+            client.publish(LIGHT_CMD_PUBSUB_CHANNEL, f"{ch}:{text}")
             written[ch] = val
     except redis.RedisError as exc:
         return json_response({"ok": False, "error": "redis_unreachable", "detail": str(exc)}, status=502)

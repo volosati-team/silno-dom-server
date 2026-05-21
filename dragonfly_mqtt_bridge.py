@@ -3,11 +3,16 @@
 DragonFly <-> MQTT connector daemon.
 
 Architecture:
-  panel UI -> POST /api/light/set -> DragonFly SET light:chN:cmd
-    -> keyspace notification __keyspace@0__:light:*:cmd
-    -> publish MQTT home/light/chN/set on|off
+  panel UI -> POST /api/light/set
+    -> DragonFly SET light:chN:cmd (audit/last-value)
+    -> DragonFly PUBLISH light:cmd:set "chN:true|false" (trigger)
+    -> bridge SUBSCRIBE light:cmd:set
+    -> MQTT publish home/light/chN/set on|off
   MQTT home/light/+/state -> DragonFly SET light:chN:state true|false
     -> panel UI GET /api/light/state -> MGET light:ch1:state light:ch3:state
+
+DragonFly's CONFIG SET notify-keyspace-events is read-only (only Ex supported
+at startup), so we use an explicit pubsub channel instead of keyspace events.
 
 Lives alongside (not replacing) home_mqtt_bridge.py and web/app.py.
 """
@@ -39,8 +44,9 @@ MQTT_PORT = int(os.environ.get("MQTT_PORT", "1883"))
 MQTT_USER = os.environ.get("MQTT_USER", "silnodom")
 MQTT_PASS = os.environ.get("MQTT_PASS", "12345")
 
-CH_PATTERN = re.compile(r"^light:(ch\d+):cmd$")
+CMD_PAYLOAD_PATTERN = re.compile(r"^(ch\d+):(true|false)$")
 STATE_TOPIC_PATTERN = re.compile(r"^home/light/(ch\d+)/state$")
+CMD_CHANNEL = "light:cmd:set"
 
 _r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 _mqtt = mqtt.Client(client_id="dragonfly_bridge", clean_session=True)
@@ -67,24 +73,22 @@ def on_mqtt_message(client, userdata, msg):
     log.info("state %s=%s", ch, val)
 
 
-def keyspace_listener():
-    log.info("enabling keyspace notifications")
-    _r.config_set("notify-keyspace-events", "K$")
+def cmd_listener():
     pubsub = _r.pubsub()
-    pubsub.psubscribe("__keyspace@0__:light:*:cmd")
-    log.info("subscribed to keyspace events")
+    pubsub.subscribe(CMD_CHANNEL)
+    log.info("subscribed to redis channel %s", CMD_CHANNEL)
     for ev in pubsub.listen():
-        if ev.get("type") != "pmessage":
+        if ev.get("type") != "message":
             continue
-        if ev.get("data") != "set":
+        data = ev.get("data")
+        if not isinstance(data, str):
             continue
-        key = ev["channel"].split(":", 1)[1]
-        m = CH_PATTERN.match(key)
+        m = CMD_PAYLOAD_PATTERN.match(data.strip())
         if not m:
+            log.warning("bad cmd payload: %r", data)
             continue
-        ch = m.group(1)
-        val = _r.get(key)
-        payload = "on" if str(val).lower() == "true" else "off"
+        ch, val = m.group(1), m.group(2)
+        payload = "on" if val == "true" else "off"
         _mqtt.publish(f"home/light/{ch}/set", payload, qos=1)
         log.info("cmd %s=%s -> mqtt", ch, payload)
 
@@ -94,7 +98,7 @@ def main():
     _mqtt.on_connect = on_mqtt_connect
     _mqtt.on_message = on_mqtt_message
     _mqtt.connect(MQTT_HOST, MQTT_PORT, keepalive=60)
-    t = threading.Thread(target=keyspace_listener, daemon=True)
+    t = threading.Thread(target=cmd_listener, daemon=True)
     t.start()
     _mqtt.loop_forever()
 
