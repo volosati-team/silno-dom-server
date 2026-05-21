@@ -1220,6 +1220,40 @@ async function tryNativePlay(item) {
   return await nativeReresolveAndPlay(item, false);
 }
 
+// Silent WAV used to "unlock" the <audio> element during the click gesture.
+// Chrome / Bromite require audio.play() to be invoked inside a user-gesture
+// handler. The async resolve breaks the gesture chain, so the real play()
+// later gets rejected with "user didn't interact". We start a synchronous
+// muted play of this empty WAV first, which arms the audio element for
+// subsequent src swaps without needing another gesture.
+var NATIVE_UNLOCK_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+var nativeUnlocked = false;
+
+function nativePrimeForGesture() {
+  if (nativeUnlocked) return;
+  var audio = ensureNativeAudio();
+  // Unmuted play of a 0-sample WAV inside the gesture window. This consumes
+  // the user-gesture token and engages the audio element for the page's
+  // lifetime, so subsequent src swaps + play() calls work without a fresh
+  // gesture. The WAV is silent — no audible click.
+  try {
+    audio.src = NATIVE_UNLOCK_WAV;
+    var p = audio.play();
+    if (p && typeof p.then === 'function') {
+      p.then(function() {
+        nativeUnlocked = true;
+        console.log('native: unlocked');
+      }).catch(function(e) {
+        console.warn('native: unlock play rejected:', e && e.message);
+      });
+    } else {
+      nativeUnlocked = true;
+    }
+  } catch(e) {
+    console.warn('native: unlock threw:', e && e.message);
+  }
+}
+
 function loadSavedItem(item) {
   console.log('loadSavedItem:', item.service, item.url);
   openMediaPanel();
@@ -1227,10 +1261,12 @@ function loadSavedItem(item) {
   currentSavedUrl = item.url;
   renderSavedList();
 
+  // SYNC: prime the audio element inside the user-gesture window. Must run
+  // before any await/promise so the gesture token is consumed by an audio
+  // play() call. Future src swaps then work without "didn't interact" errors.
+  nativePrimeForGesture();
+
   // Try native audio first. If it succeeds we're done — no iframe needed.
-  // tryNativePlay is async but we kick it off synchronously so the click
-  // gesture flows into audio.play(). Iframe fallbacks run if it returns
-  // false (resolver failure or unsupported host).
   tryNativePlay(item).then(function(ok) {
     if (ok) {
       console.log('native: handled', item.service, item.url);
