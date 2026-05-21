@@ -672,7 +672,7 @@ async def api_light_state():
 # `/api/state` (light status) without exposing the light backend directly.
 # ---------------------------------------------------------------------------
 
-LIGHT_BACKEND = "http://127.0.0.1:8080"
+LIGHT_BACKEND = "http://127.0.0.1:8081"
 
 
 @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"], include_in_schema=False)

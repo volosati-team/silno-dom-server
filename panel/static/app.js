@@ -50,8 +50,8 @@
     });
   };
   window._lisaClearConsole = function(){ if (body) body.innerHTML = ''; };
-  window._lisaToggleConsole = function(){ var p = document.getElementById('console-pane'); if (p) p.classList.toggle('hidden'); };
-  window._lisaShowConsole = function(){ var p = document.getElementById('console-pane'); if (p) p.classList.remove('hidden'); };
+  window._lisaToggleConsole = function(){ var p = document.getElementById('console-pane'); if (!p) return; if (window.matchMedia && window.matchMedia('(orientation: portrait)').matches) { p.classList.toggle('shown'); } else { p.classList.toggle('hidden'); } };
+  window._lisaShowConsole = function(){ var p = document.getElementById('console-pane'); if (!p) return; if (window.matchMedia && window.matchMedia('(orientation: portrait)').matches) { p.classList.add('shown'); } else { p.classList.remove('hidden'); } };
 })();
 
 // ── Server-side error/log uploader for old browsers (Chrome 72 etc.) ─────────

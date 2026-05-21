@@ -55,7 +55,7 @@ if pgrep -f "uvicorn web.app:app" > /dev/null; then
     log "web already running, skip"
 else
     log "starting web UI..."
-    nohup python3 -m uvicorn web.app:app --host 0.0.0.0 --port "${WEB_PORT:-8080}" >> logs/web.log 2>&1 &
+    nohup python3 -m uvicorn web.app:app --host 0.0.0.0 --port "${WEB_PORT:-8081}" >> logs/web.log 2>&1 &
     log "web pid=$!"
 fi
 
@@ -64,7 +64,7 @@ if pgrep -f "uvicorn panel.app:app" > /dev/null; then
     log "panel already running, skip"
 else
     log "starting media panel..."
-    nohup python3 -m uvicorn panel.app:app --host 0.0.0.0 --port "${PANEL_PORT:-8081}" >> logs/panel.log 2>&1 &
+    nohup python3 -m uvicorn panel.app:app --host 0.0.0.0 --port "${PANEL_PORT:-8080}" >> logs/panel.log 2>&1 &
     log "panel pid=$!"
 fi
 
@@ -84,12 +84,13 @@ if command -v cloudflared &>/dev/null; then
     else
         log "starting CF tunnel..."
         truncate -s 0 logs/cf.log 2>/dev/null || true   # clear stale URLs before fresh start
-        nohup cloudflared tunnel --url "http://localhost:${WEB_PORT:-8080}" >> logs/cf.log 2>&1 &
+        nohup cloudflared tunnel --url "http://localhost:${PANEL_PORT:-8080}" >> logs/cf.log 2>&1 &
         log "cloudflared pid=$! — URL появится в logs/cf.log через ~5 сек"
     fi
 fi
 
-log "done. local: http://localhost:${WEB_PORT:-8080}"
+log "done. local panel:  http://localhost:${PANEL_PORT:-8080}"
+log "done. local light: http://localhost:${WEB_PORT:-8081}"
 log "cf url:  grep 'trycloudflare.com' logs/cf.log"
 
 # Write tunnel URL to CF KV so workers pick it up automatically
