@@ -449,6 +449,7 @@ function scToggleShuffle() {
 }
 function scSetVolume(val) { if (scWidget) scWidget.setVolume(parseInt(val)); }
 document.getElementById('sc-vol').addEventListener('input', e => {
+  if (activePlayer === 3 && nativeAudio) { nativeAudio.volume = Math.max(0, Math.min(1, parseInt(e.target.value) / 100)); return; }
   if (activePlayer === 1) scSetVolume(e.target.value);
   else if (activePlayer === 0) ytCmd('setVolume', [parseInt(e.target.value)]);
 });
@@ -559,20 +560,40 @@ function ytCmd(func, args) {
   } catch {}
 }
 
+function nativeSavedIndex() {
+  if (typeof savedList === 'undefined' || !savedList.length || !currentSavedUrl) return -1;
+  return savedList.findIndex(function(it) { return it.url === currentSavedUrl; });
+}
+
 function scPlayPause() {
-  console.log('scPlayPause: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null') + ' ytPlaying=' + ytPlaying);
+  console.log('scPlayPause: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null') + ' ytPlaying=' + ytPlaying + ' nativePaused=' + (nativeAudio ? nativeAudio.paused : 'n/a'));
+  if (activePlayer === 3 && nativeAudio) {
+    if (nativeAudio.paused) { try { nativeAudio.play(); } catch(e) {} }
+    else { try { nativeAudio.pause(); } catch(e) {} }
+    return;
+  }
   if (activePlayer === 0) { ytPlaying ? ytCmd('pauseVideo') : ytCmd('playVideo'); }
   else if (scWidget) scWidget.toggle();
   else console.warn('scPlayPause: no handler — activePlayer=' + activePlayer + ' scWidget missing');
 }
 function scPrev() {
   console.log('scPrev: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null'));
+  if (activePlayer === 3) {
+    var idx = nativeSavedIndex();
+    if (idx > 0) loadSavedItem(savedList[idx - 1]);
+    return;
+  }
   if (activePlayer === 0) ytCmd('previousVideo');
   else if (scWidget) scWidget.prev();
   else console.warn('scPrev: no handler');
 }
 function scNext() {
   console.log('scNext: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null'));
+  if (activePlayer === 3) {
+    var idx = nativeSavedIndex();
+    if (idx >= 0 && idx + 1 < savedList.length) loadSavedItem(savedList[idx + 1]);
+    return;
+  }
   if (activePlayer === 0) ytCmd('nextVideo');
   else if (scWidget) scWidget.next();
   else console.warn('scNext: no handler');
@@ -580,6 +601,10 @@ function scNext() {
 
 document.getElementById('sc-prog').addEventListener('click', e => {
   const pct = e.offsetX / e.currentTarget.offsetWidth;
+  if (activePlayer === 3 && nativeAudio && nativeAudio.duration && isFinite(nativeAudio.duration)) {
+    try { nativeAudio.currentTime = nativeAudio.duration * pct; } catch(err) {}
+    return;
+  }
   if (activePlayer === 0 && ytDuration > 0) {
     ytCmd('seekTo', [ytDuration * pct, true]);
   } else if (activePlayer === 1 && scWidget) {
@@ -1051,13 +1076,19 @@ document.addEventListener('mousemove', e => { dragMove(e.clientX, e.clientY); })
 document.addEventListener('mouseup', dragEnd);
 
 // ─── NATIVE AUDIO SHIM (yt-dlp resolver -> <audio>) ────────────────────────
-// Bromite v108 on the iiyama kiosk cannot play audio from the SC Widget
-// iframe. Plan A: resolve the saved URL through /api/stream/resolve (proxied
-// to streaming/app.py on :8083) and play the direct stream URL via a native
-// <audio> element. Falls back to the iframe path if the resolver fails.
+// The streaming service lives on a sibling port (:8083). We call it directly
+// instead of via panel proxy: WSL2+Throne intercepts loopback inside the host
+// and returns 502 on any same-host proxy, but external LAN clients reach
+// :8083 fine. CORS is permissive on the resolver (allow_origins=*).
+const STREAM_BASE = location.protocol + '//' + location.hostname + ':8083';
 let nativeAudio = null;
 let nativeCurrent = null;     // { url, item, resolved_at, expires_at }
 let nativeReresolveTimer = null;
+
+function setBarPlayPauseIcon(playing) {
+  var el = document.getElementById('sc-playpause');
+  if (el) el.textContent = playing ? '⏸' : '▶';
+}
 
 function ensureNativeAudio() {
   if (nativeAudio) return nativeAudio;
@@ -1069,6 +1100,25 @@ function ensureNativeAudio() {
   document.body.appendChild(nativeAudio);
   nativeAudio.addEventListener('play', function() {
     console.log('native: play');
+    if (activePlayer === 3) setBarPlayPauseIcon(true);
+  });
+  nativeAudio.addEventListener('pause', function() {
+    console.log('native: pause');
+    if (activePlayer === 3) setBarPlayPauseIcon(false);
+  });
+  nativeAudio.addEventListener('timeupdate', function() {
+    if (activePlayer !== 3) return;
+    var dur = nativeAudio.duration;
+    var cur = nativeAudio.currentTime;
+    if (dur && isFinite(dur)) {
+      var pct = (cur / dur) * 100;
+      var fill = document.getElementById('sc-prog-fill');
+      if (fill) fill.style.width = pct + '%';
+      var curEl = document.getElementById('sc-time-cur');
+      var durEl = document.getElementById('sc-time-dur');
+      if (curEl) curEl.textContent = scFmtTime(cur * 1000);
+      if (durEl) durEl.textContent = scFmtTime(dur * 1000);
+    }
   });
   nativeAudio.addEventListener('error', function() {
     var err = nativeAudio.error;
@@ -1080,6 +1130,7 @@ function ensureNativeAudio() {
   });
   nativeAudio.addEventListener('ended', function() {
     console.log('native: ended');
+    if (activePlayer === 3) setBarPlayPauseIcon(false);
     if (typeof savedList !== 'undefined' && savedList.length && currentSavedUrl) {
       var idx = savedList.findIndex(function(it) { return it.url === currentSavedUrl; });
       if (idx >= 0 && idx + 1 < savedList.length) {
@@ -1098,11 +1149,12 @@ function nativeStop() {
   try { nativeAudio.load(); } catch(e) {}
   nativeCurrent = null;
   if (nativeReresolveTimer) { clearTimeout(nativeReresolveTimer); nativeReresolveTimer = null; }
+  setBarPlayPauseIcon(false);
 }
 
 async function nativeReresolveAndPlay(item, isRetry) {
   try {
-    var r = await fetch('/api/stream/resolve?url=' + encodeURIComponent(item.url));
+    var r = await fetch(STREAM_BASE + '/api/stream/resolve?url=' + encodeURIComponent(item.url));
     if (!r.ok) {
       console.warn('native: resolve http ' + r.status);
       return false;
@@ -1115,6 +1167,7 @@ async function nativeReresolveAndPlay(item, isRetry) {
     console.log('native: resolve ok', d.title || item.url);
     var audio = ensureNativeAudio();
     audio.src = d.stream_url;
+    activePlayer = 3;
     nativeCurrent = {
       url: item.url,
       item: item,
