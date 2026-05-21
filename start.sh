@@ -77,6 +77,15 @@ else
     log "dragonfly bridge pid=$!"
 fi
 
+# Audio streaming resolver (yt-dlp wrapper for kiosk native <audio>)
+if pgrep -f "uvicorn streaming.app:app" > /dev/null; then
+    log "streaming already running, skip"
+else
+    log "starting streaming server..."
+    nohup python3 -m uvicorn streaming.app:app --host 0.0.0.0 --port "${STREAMING_PORT:-8083}" >> logs/streaming.log 2>&1 &
+    log "streaming pid=$!"
+fi
+
 # CF Tunnel (если cloudflared установлен)
 if command -v cloudflared &>/dev/null; then
     if pgrep -x cloudflared > /dev/null; then
