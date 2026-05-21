@@ -128,6 +128,51 @@ work, but unlocks better streaming options if solved.
 
 ---
 
+## Security migration — pre-prod gates
+
+Current dev-stand passwords (`12345` everywhere — see root `README.md`) are
+temporary. Before this stack is exposed beyond the LAN or carries anything
+sensitive, the following are **mandatory** — no exceptions, no "later":
+
+- **No password auth for shell.** SSH on every host (voloNuk Windows side
+  and any WSL guest with sshd) — `PasswordAuthentication no`, key-only.
+  Disable root login (`PermitRootLogin no`). Audit `authorized_keys` per
+  user; remove anything stale.
+- **MQTT over TLS, client certs preferred.** Mosquitto on `:8883` (TLS),
+  username+password listener killed. MOiO firmware that doesn't support
+  auth stays on its own listener bound to `127.0.0.1` only, behind the
+  panel proxy. No bare `silnodom/12345` listener anywhere reachable from
+  the LAN.
+- **No naked secrets in `.env`.** Move every credential
+  (`MQTT_PASS`, `PASS_VOLOSATI`, `PASS_MAX`, `CF_API_TOKEN`, bridge
+  token, SC client secret) into a real secret store
+  (1Password CLI / sops + age / Bitwarden) and resolve at process start.
+  `.env` only holds non-secret config.
+- **REST API tokens, rotated.** `/api/light/set`, `/api/light/toggle` and
+  every write surface require a bearer token. Tokens rotated quarterly
+  or sooner on compromise. Anonymous read of `/state` stays open by
+  design but can be flipped off behind a feature flag.
+- **HTTPS termination before docker.** Caddy or nginx in front of every
+  internal service — no plain HTTP exposed even on the LAN edge once
+  the project leaves dev. SC OAuth, Yandex / Spotify callbacks require
+  this anyway.
+- **Bridge token rotated, scoped.** Tailscale Funnel `http_exec_bridge`
+  token (`AG_BRIDGE_SECRET`) rotated and scoped to a dedicated
+  Tailscale ACL. No `cmd.exe`-style arbitrary exec on prod — replace
+  with a narrow RPC surface (`pull`, `restart`, `read-log`,
+  `read-dbg-log`).
+- **Cloudflared tunnel scoped or killed.** `trycloudflare.com` ephemeral
+  tunnels are fine for dev but anyone with the URL hits the panel.
+  Move to named CF tunnel + Access-policy (Cloudflare Zero Trust), or
+  drop public exposure entirely.
+- **Audit the legacy `12345` blast radius before flip.** Inventory every
+  place the old creds live: `mqtt_passwords`, `.env`, in-repo docs,
+  any host's `.bash_history`, any backups. Rotate atomically, not
+  one-by-one.
+
+This block becomes the pre-prod checklist. No production traffic — anything
+broader than a single Andrey-owned LAN — until every item is checked.
+
 ## Architecture invariants
 
 These are not features — they are constraints any new feature must respect.

@@ -72,11 +72,31 @@ silno-dom-server/
 | Web UI      | guest      | (пусто) |
 | MQTT broker | silnodom   | 12345   |
 
-Дыры, которые нужно закрыть при переезде на прод:
-- Сменить все пароли на сильные
-- Добавить API-токен на REST-эндпоинты `/set` и `/toggle`
-- Завести отдельного MQTT-юзера для MOiO когда прошивка начнёт поддерживать auth
-- Рассмотреть именованный CF tunnel вместо ephemeral (постоянный URL, не зависит от KV)
+Дыры, которые нужно закрыть при переезде на прод
+(полный pre-prod чеклист — `panel/FEATURES.md` → «Security migration»):
+
+- **SSH — только ключи.** `PasswordAuthentication no`, `PermitRootLogin no`
+  на всех хостах (voloNuk Windows side и любом WSL guest с sshd). Никакой
+  логин паролем не должен работать в принципе.
+- **MQTT через TLS.** Mosquitto на `:8883` (TLS), голый username+password
+  listener — удалить. Для MOiO (не поддерживает auth прошивкой) — отдельный
+  listener привязанный к `127.0.0.1` за proxy панели.
+- **Все секреты — в secret store** (1Password CLI / sops+age / Bitwarden).
+  `MQTT_PASS`, `PASS_VOLOSATI`, `PASS_MAX`, `CF_API_TOKEN`, бридж-токен,
+  SC client secret — резолвить при старте процесса, не хранить в `.env`.
+- **REST API — bearer-токен на write-эндпоинты** (`/set`, `/toggle` и всё
+  что меняет состояние). Ротация раз в квартал или раньше при компрометации.
+  Анонимный read `/state` можно оставить, но за feature-flag.
+- **HTTPS termination перед docker** (Caddy / nginx). Никакого plain HTTP
+  даже на LAN edge после dev-фазы.
+- **Бридж-токен ротировать и заскопить.** `AG_BRIDGE_SECRET` —
+  пересоздать, привязать к dedicated Tailscale ACL. Произвольный
+  `cmd.exe`-exec в проде неприемлем; заменить на узкий RPC.
+- **Cloudflared — именованный tunnel или выключить.** `trycloudflare.com`
+  ephemeral анонимно публичен; на проде — CF Zero Trust Access policy
+  поверх named tunnel, либо никакого внешнего выхода.
+- **Audit blast radius `12345`** перед flip — `mqtt_passwords`, `.env`,
+  in-repo docs, `.bash_history`, бэкапы. Ротация атомарная, не по одному.
 
 ## Права доступа
 
