@@ -49,6 +49,16 @@
       throw e;
     });
   };
+  // Global click tap — logs any button-ish element so non-fetch UI events are visible in the pane.
+  document.addEventListener('click', function(e){
+    var t = e.target.closest('button, [onclick], .ctrl-btn, .sc-btn, .saved-item, .ztab, .ttab');
+    if (!t) return;
+    var id = t.id || '';
+    var cls = (t.className || '').toString().split(/\s+/).slice(0,2).join('.');
+    var txt = (t.innerText || t.textContent || '').trim().slice(0, 24).replace(/\s+/g, ' ');
+    append('info', ['tap', (id ? '#'+id : cls), txt ? '"'+txt+'"' : '']);
+  }, true);
+
   window._lisaClearConsole = function(){ if (body) body.innerHTML = ''; };
   window._lisaToggleConsole = function(){ var p = document.getElementById('console-pane'); if (!p) return; if (window.matchMedia && window.matchMedia('(orientation: portrait)').matches) { p.classList.toggle('shown'); } else { p.classList.toggle('hidden'); } };
   window._lisaShowConsole = function(){ var p = document.getElementById('console-pane'); if (!p) return; if (window.matchMedia && window.matchMedia('(orientation: portrait)').matches) { p.classList.add('shown'); } else { p.classList.remove('hidden'); } };
