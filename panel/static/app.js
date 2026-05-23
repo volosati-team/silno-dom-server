@@ -647,6 +647,9 @@ function nativeSavedIndex() {
 
 function scPlayPause() {
   console.log('scPlayPause: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null') + ' ytPlaying=' + ytPlaying + ' scIsPlaying=' + scIsPlaying + ' nativePaused=' + (nativeAudio ? nativeAudio.paused : 'n/a'));
+  // Re-prime gesture token at every bar tap so the iframe .play() that
+  // follows inherits a fresh user-gesture record. Idempotent and muted.
+  nativePrimeForGesture();
   // Cold-start case: after a page refresh nothing has been loaded yet but
   // currentSavedUrl is restored from saved-list. First tap on the bar's
   // play-pause should kick the player by loading the current saved item.
@@ -1465,18 +1468,21 @@ var nativeUnlocked = false;
 function nativePrimeForGesture() {
   if (nativeUnlocked) return;
   var audio = ensureNativeAudio();
-  // Loop a 200ms silent WAV so the audio element stays in "playing" state
-  // through the async resolve. Once Chromium has seen play() succeed inside
-  // a user gesture, src swaps + play() on the same element no longer need a
-  // fresh gesture — playback continues uninterrupted.
+  // Muted + zero-volume so the silent WAV never competes for Android audio
+  // focus with the iframe widgets. The point is *only* to consume the
+  // user-gesture token inside a real audio.play() call — once Chromium has
+  // registered that, subsequent iframe .play() calls inherit the unlocked
+  // state on the page session.
   try {
+    audio.muted = true;
+    audio.volume = 0;
     audio.src = NATIVE_UNLOCK_WAV;
     audio.loop = true;
     var p = audio.play();
     if (p && typeof p.then === 'function') {
       p.then(function() {
         nativeUnlocked = true;
-        console.log('native: unlocked (loop primed)');
+        console.log('native: unlocked (muted-only)');
       }).catch(function(e) {
         console.warn('native: unlock play rejected:', e && e.message);
       });
@@ -1546,10 +1552,12 @@ function loadSavedItem(item) {
   // before resolve finishes. Otherwise the bar keeps the previous item.
   applySavedItemBarPreview(item);
 
-  // No more native unlock priming. We do not use native audio for any
-  // service — they all go to their iframe widget. The old prime+stop
-  // sequence (play silent WAV → pause it) stole Android audio focus
-  // from the SC widget, which made SC play immediately re-pause.
+  // Prime native audio (muted + volume 0) inside the user-gesture window
+  // so subsequent iframe .play() calls inherit the unlocked-page state.
+  // Without this, Bromite's autoplay policy kicks the SC widget after a
+  // few seconds (no gesture seen inside the iframe). Muted prime no
+  // longer steals audio focus because volume=0 and muted=true.
+  nativePrimeForGesture();
   loadSavedItemIframe(item);
 }
 
