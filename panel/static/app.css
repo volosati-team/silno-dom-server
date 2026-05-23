@@ -222,7 +222,7 @@ html, body {
 
 /* ─── SAVED PANEL (sidebar) ─────────────────────────────────────────────── */
 #saved-panel {
-  width: 200px; flex-shrink: 0;
+  width: 600px; flex-shrink: 0;
   border-right: 1px solid var(--border);
   display: flex; flex-direction: column;
   overflow: hidden; background: var(--bg);
@@ -266,7 +266,7 @@ html, body {
   }
 }
 .saved-thumb {
-  width: 36px; height: 27px; border-radius: 3px;
+  width: 72px; height: 54px; border-radius: 6px;
   object-fit: cover; flex-shrink: 0; background: var(--dim);
 }
 .saved-ren-btn {
@@ -282,67 +282,77 @@ html, body {
   border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
 #saved-panel-title {
-  font-size: 10px; color: var(--muted); letter-spacing: 0.1em; flex: 1;
+  font-size: 20px; color: var(--muted); letter-spacing: 0.1em; flex: 1;
 }
 #saved-add-btn, #saved-close-btn, #saved-search-btn {
   background: none; border: none; cursor: pointer;
-  color: var(--dim); font-size: 16px; padding: 2px 5px;
+  color: var(--dim); font-size: 32px; padding: 4px 10px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 4px; transition: color 0.15s; flex-shrink: 0;
+  border-radius: 8px; transition: color 0.15s; flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
 }
+#saved-search-btn svg { width: 28px; height: 28px; }
 #saved-add-btn:active, #saved-close-btn:active, #saved-search-btn:active { color: var(--yellow); }
 #saved-search-btn svg { display: block; }
 #saved-search-btn:active svg { stroke: var(--yellow); }
 
 #saved-search-row {
-  display: none; gap: 6px; padding: 8px 10px;
+  display: none; gap: 12px; padding: 16px 20px;
   border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
 #saved-search-row.show { display: flex; }
 #saved-search-input {
   flex: 1; background: #111120; border: 1px solid var(--border);
-  border-radius: 6px; padding: 6px 10px;
-  color: var(--text); font-size: 12px; outline: none;
+  border-radius: 10px; padding: 12px 20px;
+  color: var(--text); font-size: 22px; outline: none;
   touch-action: auto; -webkit-user-select: auto; user-select: auto;
   transition: border-color 0.15s;
 }
+/* Hide native ×/clear button on input[type=search] — owner wants iOS/Material look */
+#saved-search-input::-webkit-search-cancel-button,
+#saved-search-input::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
 #saved-search-input:focus { border-color: var(--yellow); }
-#saved-search-input::placeholder { color: var(--dim); font-size: 11px; }
+#saved-search-input::placeholder { color: var(--dim); font-size: 20px; }
 #saved-search-ok {
-  background: var(--yellow); border: none; border-radius: 6px;
-  width: 32px; color: #000; font-size: 14px; font-weight: 700;
+  background: var(--yellow); border: none; border-radius: 10px;
+  width: 64px; height: 50px; color: #000; font-size: 26px; font-weight: 700;
   cursor: pointer; flex-shrink: 0; transition: opacity 0.15s;
 }
 #saved-search-ok:active { opacity: 0.7; }
 
 #search-results {
   border-bottom: 1px solid var(--border);
-  max-height: 50vh; overflow-y: auto; scrollbar-width: none;
+  max-height: 60vh; overflow-y: auto; scrollbar-width: none;
 }
 #search-results:empty { display: none; }
 #search-results::-webkit-scrollbar { display: none; }
-.search-status { padding: 12px 14px; font-size: 11px; color: var(--muted); }
+.search-status { padding: 24px 28px; font-size: 20px; color: var(--muted); }
 .search-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.04);
-  background: #0e0e1c;
+  display: flex; align-items: center; gap: 16px;
+  padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  background: #0e0e1c; cursor: pointer;
+  transition: background 0.1s;
 }
+.search-item:active { background: #ffffff08; }
 .search-thumb {
-  width: 44px; height: 28px; object-fit: cover;
-  border-radius: 3px; flex-shrink: 0; background: var(--dim);
+  width: 88px; height: 56px; object-fit: cover;
+  border-radius: 6px; flex-shrink: 0; background: var(--dim);
 }
 .search-meta { flex: 1; min-width: 0; }
 .search-title {
-  font-size: 12px; color: var(--text); line-height: 1.25;
+  font-size: 22px; color: var(--text); line-height: 1.3;
   overflow: hidden; text-overflow: ellipsis;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
 }
-.search-channel { font-size: 10px; color: var(--muted); margin-top: 2px; }
+.search-channel { font-size: 16px; color: var(--muted); margin-top: 4px; }
 .search-btn {
   background: none; border: 1px solid var(--border);
-  color: var(--text); font-size: 14px;
-  width: 32px; height: 32px; border-radius: 50%;
+  color: var(--text); font-size: 24px;
+  width: 52px; height: 52px; border-radius: 50%;
   cursor: pointer; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   transition: background 0.15s, border-color 0.15s;
@@ -395,21 +405,21 @@ html, body {
   letter-spacing: 0.04em; line-height: 1.7; text-align: center;
 }
 .saved-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 9px 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 16px;
+  padding: 18px 24px; cursor: pointer;
   border-bottom: 1px solid var(--border); transition: background 0.1s;
 }
 .saved-item:active { background: #ffffff08; }
 .svc-ico {
-  width: 18px; height: 18px; flex-shrink: 0;
-  border-radius: 3px; display: flex; align-items: center; justify-content: center;
-  font-size: 9px; font-weight: 800;
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: 6px; display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 800;
 }
 .svc-ico.yt { background: #f00; color: #fff; }
 .svc-ico.sc { background: var(--yellow); color: #000; }
 .svc-ico.sp { background: #1db954; color: #fff; }
 .saved-title {
-  font-size: 11px; color: var(--text); letter-spacing: 0.01em;
+  font-size: 22px; color: var(--text); letter-spacing: 0.01em;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   flex: 1; min-width: 0;
 }

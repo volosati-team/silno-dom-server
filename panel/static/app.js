@@ -1795,12 +1795,15 @@ async function searchSubmit() {
           '<div class="search-title">' + escapeHtml(title) + '</div>' +
           '<div class="search-channel">' + escapeHtml(it.channel || '') + '</div>' +
         '</div>' +
-        '<button class="search-btn search-play" title="Запустить">▶</button>' +
         '<button class="search-btn search-save" title="В сохранёнки">＋</button>';
-      card.querySelector('.search-play').addEventListener('click', function () {
+      // Tap on the card itself → play. Save button is a separate click target
+      // that stops propagation so it doesn't trigger play.
+      card.addEventListener('click', function () {
         loadSavedItem({ url: it.url, service: 'youtube', title: title, thumbnail: it.thumbnail });
       });
-      card.querySelector('.search-save').addEventListener('click', function () {
+      var saveBtn = card.querySelector('.search-save');
+      saveBtn.addEventListener('click', function (ev) {
+        ev.stopPropagation();
         addToSaved(it.url, title);
       });
       results.appendChild(card);

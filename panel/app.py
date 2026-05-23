@@ -472,7 +472,7 @@ async def api_search(request: Request):
         return json_response({"results": [], "error": "fetch_failed",
                               "detail": str(e)[:200]}, status=502)
 
-    out = []
+    raw = []
     for it in data.get("items", []):
         vid = (it.get("id") or {}).get("videoId")
         sn = it.get("snippet") or {}
@@ -481,7 +481,7 @@ async def api_search(request: Request):
         thumbs = (sn.get("thumbnails") or {})
         thumb = (thumbs.get("medium") or thumbs.get("high")
                  or thumbs.get("default") or {}).get("url", "")
-        out.append({
+        raw.append({
             "id": vid,
             "url": f"https://www.youtube.com/watch?v={vid}",
             "service": "youtube",
@@ -489,7 +489,40 @@ async def api_search(request: Request):
             "channel": sn.get("channelTitle", ""),
             "thumbnail": thumb,
         })
-    return json_response({"results": out})
+
+    # Second-pass: ask videos.list?part=status,contentDetails for embeddable
+    # flag and region restrictions. Skip non-embeddable so the bar's tap won't
+    # land on «video unavailable» from label/uploader blocks.
+    embeddable = {v["id"]: True for v in raw}
+    if raw:
+        ids_csv = ",".join(v["id"] for v in raw)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                vr = await client.get(
+                    "https://www.googleapis.com/youtube/v3/videos",
+                    params={
+                        "part": "status",
+                        "id": ids_csv,
+                        "key": YOUTUBE_API_KEY,
+                    },
+                )
+                if vr.status_code == 200:
+                    vdata = vr.json()
+                    for it in vdata.get("items", []):
+                        vid = it.get("id")
+                        st = it.get("status") or {}
+                        if not st.get("embeddable", True):
+                            embeddable[vid] = False
+                        # privacyStatus other than "public"/"unlisted" → drop
+                        ps = st.get("privacyStatus")
+                        if ps and ps not in ("public", "unlisted"):
+                            embeddable[vid] = False
+        except Exception:
+            # If the second-pass fails, keep raw results — don't block.
+            pass
+
+    filtered = [v for v in raw if embeddable.get(v["id"], True)]
+    return json_response({"results": filtered, "dropped": len(raw) - len(filtered)})
 
 
 # ---------------------------------------------------------------------------
