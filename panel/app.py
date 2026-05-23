@@ -490,10 +490,11 @@ async def api_search(request: Request):
             "thumbnail": thumb,
         })
 
-    # Second-pass: ask videos.list?part=status,contentDetails for embeddable
-    # flag and region restrictions. Skip non-embeddable so the bar's tap won't
-    # land on «video unavailable» from label/uploader blocks.
-    embeddable = {v["id"]: True for v in raw}
+    # Second-pass: pull part=status,contentDetails for the cheap heuristic.
+    # YT Data API status.embeddable is unreliable (returns true for label-
+    # locked videos like Despacito). Combine multiple cheap signals — see
+    # panel/tests/test_yt_filter.py for the validation harness.
+    drop_reasons = {}  # video_id → reason string (or absent → keep)
     if raw:
         ids_csv = ",".join(v["id"] for v in raw)
         try:
@@ -501,28 +502,64 @@ async def api_search(request: Request):
                 vr = await client.get(
                     "https://www.googleapis.com/youtube/v3/videos",
                     params={
-                        "part": "status",
+                        "part": "status,contentDetails",
                         "id": ids_csv,
                         "key": YOUTUBE_API_KEY,
                     },
                 )
                 if vr.status_code == 200:
                     vdata = vr.json()
-                    for it in vdata.get("items", []):
-                        vid = it.get("id")
-                        st = it.get("status") or {}
-                        if not st.get("embeddable", True):
-                            embeddable[vid] = False
-                        # privacyStatus other than "public"/"unlisted" → drop
-                        ps = st.get("privacyStatus")
-                        if ps and ps not in ("public", "unlisted"):
-                            embeddable[vid] = False
+                    by_id = {it.get("id"): it for it in vdata.get("items", [])}
+                else:
+                    by_id = {}
         except Exception:
-            # If the second-pass fails, keep raw results — don't block.
-            pass
+            by_id = {}
 
-    filtered = [v for v in raw if embeddable.get(v["id"], True)]
-    return json_response({"results": filtered, "dropped": len(raw) - len(filtered)})
+        for v in raw:
+            vid = v["id"]
+            it = by_id.get(vid)
+            channel = v.get("channel") or ""
+            # 1. VEVO channels are almost always label-locked.
+            if "VEVO" in channel.upper():
+                drop_reasons[vid] = "vevo-channel"
+                continue
+            if not it:
+                continue  # videos.list failed for this id — keep
+            st = it.get("status") or {}
+            cd = it.get("contentDetails") or {}
+            region = cd.get("regionRestriction") or {}
+            rating = cd.get("contentRating") or {}
+            # 2. status.embeddable=false → uploader explicitly blocked embed.
+            if not st.get("embeddable", True):
+                drop_reasons[vid] = "embeddable-false"
+                continue
+            # 3. privacyStatus other than public/unlisted → not playable.
+            ps = st.get("privacyStatus")
+            if ps and ps not in ("public", "unlisted"):
+                drop_reasons[vid] = f"privacy-{ps}"
+                continue
+            # 4. ytAgeRestricted → embed kicks to YouTube proper, useless.
+            if rating.get("ytRating") == "ytAgeRestricted":
+                drop_reasons[vid] = "age-restricted"
+                continue
+            # 5. regionRestriction.blocked includes our region (RU). The wall
+            #    panel is in Russia; if RU is in the blocked list — drop.
+            blocked = region.get("blocked") or []
+            if "RU" in blocked:
+                drop_reasons[vid] = "region-blocked-RU"
+                continue
+            # 6. regionRestriction.allowed exists and doesn't include RU.
+            allowed = region.get("allowed") or []
+            if allowed and "RU" not in allowed:
+                drop_reasons[vid] = "region-not-allowed-RU"
+                continue
+
+    filtered = [v for v in raw if v["id"] not in drop_reasons]
+    return json_response({
+        "results": filtered,
+        "dropped": len(raw) - len(filtered),
+        "dropped_ids": drop_reasons,
+    })
 
 
 # ---------------------------------------------------------------------------

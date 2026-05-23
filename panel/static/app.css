@@ -338,6 +338,13 @@ html, body {
   transition: background 0.1s;
 }
 .search-item:active { background: #ffffff08; }
+.search-item-probing { opacity: 0.6; transition: opacity 0.3s; }
+.search-item-probing::after {
+  content: ''; width: 8px; height: 8px; border-radius: 50%;
+  background: var(--yellow); margin-left: auto; flex-shrink: 0;
+  animation: probe-pulse 1s ease-in-out infinite;
+}
+@keyframes probe-pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 .search-thumb {
   width: 88px; height: 56px; object-fit: cover;
   border-radius: 6px; flex-shrink: 0; background: var(--dim);

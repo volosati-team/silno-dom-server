@@ -1785,9 +1785,11 @@ async function searchSubmit() {
       return;
     }
     results.innerHTML = '';
+    var cards = [];
     d.results.forEach(function (it) {
       var card = document.createElement('div');
-      card.className = 'search-item';
+      card.className = 'search-item search-item-probing';
+      card.dataset.vid = it.id;
       var title = (it.title || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
       card.innerHTML =
         '<img class="search-thumb" src="' + (it.thumbnail || '') + '" alt="">' +
@@ -1796,8 +1798,6 @@ async function searchSubmit() {
           '<div class="search-channel">' + escapeHtml(it.channel || '') + '</div>' +
         '</div>' +
         '<button class="search-btn search-save" title="В сохранёнки">＋</button>';
-      // Tap on the card itself → play. Save button is a separate click target
-      // that stops propagation so it doesn't trigger play.
       card.addEventListener('click', function () {
         loadSavedItem({ url: it.url, service: 'youtube', title: title, thumbnail: it.thumbnail });
       });
@@ -1807,10 +1807,86 @@ async function searchSubmit() {
         addToSaved(it.url, title);
       });
       results.appendChild(card);
+      cards.push({ vid: it.id, el: card });
     });
+    // Stage B: device-side iframe probe. Cheap server filter missed some
+    // (e.g. PSY plays on most devices but blocks on others). Probe each
+    // result with a hidden iframe — if the YT player emits onError (codes
+    // 101/150 = embed disabled, 100 = removed/private, 5 = HTML5 error)
+    // we drop the card from the list. Cache results per video id in
+    // localStorage for 24h.
+    cards.forEach(function (c) { probeEmbeddable(c.vid, c.el); });
   } catch (e) {
     results.innerHTML = '<div class="search-status">ошибка: ' + (e && e.message) + '</div>';
   }
+}
+
+var YT_PROBE_CACHE_KEY = 'yt_probe_cache_v1';
+var YT_PROBE_TTL_MS = 24 * 3600 * 1000;
+function getProbeCache() {
+  try { return JSON.parse(localStorage.getItem(YT_PROBE_CACHE_KEY) || '{}'); }
+  catch(_) { return {}; }
+}
+function setProbeCache(c) {
+  try { localStorage.setItem(YT_PROBE_CACHE_KEY, JSON.stringify(c)); } catch(_) {}
+}
+
+function probeEmbeddable(vid, cardEl) {
+  if (!vid || !cardEl) return;
+  var cache = getProbeCache();
+  var entry = cache[vid];
+  var now = Date.now();
+  if (entry && (now - entry.t) < YT_PROBE_TTL_MS) {
+    if (entry.playable === false) cardEl.remove();
+    else cardEl.classList.remove('search-item-probing');
+    return;
+  }
+  // Create off-screen iframe with autoplay=0 so it doesn't fight for focus.
+  var probe = document.createElement('iframe');
+  probe.style.cssText = 'position:absolute;left:-99999px;top:-99999px;width:200px;height:120px;border:0;visibility:hidden';
+  probe.setAttribute('allow', 'autoplay; encrypted-media');
+  // listen for onError before src is set to avoid race
+  var resolved = false;
+  function finish(playable, reason) {
+    if (resolved) return;
+    resolved = true;
+    window.removeEventListener('message', handler);
+    try { probe.remove(); } catch(_) {}
+    var cache2 = getProbeCache();
+    cache2[vid] = { playable: playable, t: now, r: reason || '' };
+    setProbeCache(cache2);
+    if (!playable) {
+      console.warn('search probe drop', vid, reason);
+      cardEl.remove();
+    } else {
+      cardEl.classList.remove('search-item-probing');
+    }
+  }
+  function handler(e) {
+    if (!e || typeof e.data !== 'string') return;
+    if (!e.origin || !/youtube(-nocookie)?\.com$/.test(new URL(e.origin).hostname)) return;
+    try {
+      var d = JSON.parse(e.data);
+      if (d.event === 'onError') {
+        finish(false, 'onError-' + d.info);
+      } else if (d.event === 'onStateChange' || (d.event === 'infoDelivery' && d.info && typeof d.info.playerState !== 'undefined')) {
+        finish(true, 'ok');
+      } else if (d.event === 'initialDelivery' && d.info && d.info.videoData && d.info.videoData.errorCode) {
+        finish(false, 'errorCode-' + d.info.videoData.errorCode);
+      }
+    } catch(_) {}
+  }
+  window.addEventListener('message', handler);
+  document.body.appendChild(probe);
+  probe.src = 'https://www.youtube-nocookie.com/embed/' + vid + '?autoplay=0&enablejsapi=1';
+  // After src is set, request listening so YT iframe starts emitting events.
+  probe.addEventListener('load', function () {
+    try {
+      probe.contentWindow.postMessage(JSON.stringify({event:'listening', id:1, channel:'widget'}), '*');
+    } catch(_) {}
+  });
+  // 4s timeout — if YT didn't say onError nor onStateChange, assume playable.
+  setTimeout(function () { finish(true, 'timeout'); }, 4000);
 }
 
 function escapeHtml(s) {
