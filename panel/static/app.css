@@ -358,8 +358,8 @@ html, body {
 #sc-track-title-row #sc-track-title { flex: 1; min-width: 0; }
 #sc-save-current {
   background: none; border: 1px solid var(--border);
-  color: var(--muted); font-size: 14px; font-weight: 700;
-  width: 24px; height: 24px; border-radius: 50%;
+  color: var(--muted); font-size: 22px; font-weight: 700;
+  width: 48px; height: 48px; border-radius: 50%;
   cursor: pointer; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
