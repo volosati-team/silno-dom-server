@@ -98,7 +98,12 @@ html, body {
 
 /* zone constrained to one ctrl-btn row when media panel is also open */
 #zone-clip.constrained {
-  bottom: calc(100vh - var(--hh) - var(--zh) - var(--row-h));
+  bottom: auto;
+  height: var(--row-h);
+}
+#zone-clip.constrained .zone-page {
+  padding-top: 12px;
+  padding-bottom: 12px;
 }
 /* media panel starts below the ctrl-btn row when zone is constrained */
 #zone-clip.constrained ~ #media-clip.open {
