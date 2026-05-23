@@ -429,6 +429,70 @@ async def api_oembed(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Music search (YouTube Data API v3)
+# ---------------------------------------------------------------------------
+
+YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY")
+
+
+@app.get("/api/search")
+async def api_search(request: Request):
+    q = (request.query_params.get("q") or "").strip()
+    src = (request.query_params.get("src") or "youtube").strip().lower()
+    if not q:
+        return json_response({"results": [], "error": "empty_query"})
+    if src != "youtube":
+        # SC search and others — added in later phases
+        return json_response({"results": [], "error": "source_not_implemented"})
+    if not YOUTUBE_API_KEY:
+        return json_response({"results": [], "error": "missing_api_key"}, status=503)
+
+    params = {
+        "part": "snippet",
+        "q": q,
+        "type": "video",
+        "videoCategoryId": "10",  # Music
+        "maxResults": "12",
+        "key": YOUTUBE_API_KEY,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.get(
+                "https://www.googleapis.com/youtube/v3/search",
+                params=params,
+            )
+            if r.status_code != 200:
+                return json_response(
+                    {"results": [], "error": f"yt_http_{r.status_code}",
+                     "detail": r.text[:300]},
+                    status=502,
+                )
+            data = r.json()
+    except Exception as e:
+        return json_response({"results": [], "error": "fetch_failed",
+                              "detail": str(e)[:200]}, status=502)
+
+    out = []
+    for it in data.get("items", []):
+        vid = (it.get("id") or {}).get("videoId")
+        sn = it.get("snippet") or {}
+        if not vid:
+            continue
+        thumbs = (sn.get("thumbnails") or {})
+        thumb = (thumbs.get("medium") or thumbs.get("high")
+                 or thumbs.get("default") or {}).get("url", "")
+        out.append({
+            "id": vid,
+            "url": f"https://www.youtube.com/watch?v={vid}",
+            "service": "youtube",
+            "title": sn.get("title", ""),
+            "channel": sn.get("channelTitle", ""),
+            "thumbnail": thumb,
+        })
+    return json_response({"results": out})
+
+
+# ---------------------------------------------------------------------------
 # SC PKCE QR session
 # ---------------------------------------------------------------------------
 

@@ -882,8 +882,10 @@ function cleanTitle(t) {
   return (t || '').replace(/\s*[\(\[](?:official\s*(?:music\s*)?video|music\s*video|official\s*audio|official\s*lyric(?:s)?(?:\s*video)?|lyrics?(?:\s*video)?|audio|hd|4k|remaster(?:ed)?)[^\)\]]*[\)\]]/gi, '').trim();
 }
 
+let ytVideoData = null;
 function ytApplyVideoData(vd) {
   if (!vd) return;
+  ytVideoData = vd;
   const title = cleanTitle(vd.title || vd.author_name);
   if (title) document.getElementById('sc-track-title').textContent = title;
   const artist = vd.author || vd.author_name || '';
@@ -1752,6 +1754,105 @@ async function guestPasteSubmit() {
 }
 
 function showSavedSheet() { showSavedPanel(); }
+
+// ─── SEARCH (YT Data API music search) ──────────────────────────────────────
+function toggleSearchInput() {
+  var row = document.getElementById('saved-search-row');
+  var open = row.classList.toggle('show');
+  if (open) {
+    var inp = document.getElementById('saved-search-input');
+    inp.value = '';
+    inp.focus();
+  } else {
+    document.getElementById('search-results').innerHTML = '';
+  }
+}
+
+async function searchSubmit() {
+  var inp = document.getElementById('saved-search-input');
+  var q = (inp.value || '').trim();
+  if (!q) return;
+  var results = document.getElementById('search-results');
+  results.innerHTML = '<div class="search-status">ищу...</div>';
+  try {
+    var r = await fetch('/api/search?q=' + encodeURIComponent(q));
+    var d = await r.json();
+    if (!d || !d.results || !d.results.length) {
+      results.innerHTML = '<div class="search-status">ничего не нашлось'
+        + (d && d.error ? ' (' + d.error + ')' : '') + '</div>';
+      return;
+    }
+    results.innerHTML = '';
+    d.results.forEach(function (it) {
+      var card = document.createElement('div');
+      card.className = 'search-item';
+      var title = (it.title || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+      card.innerHTML =
+        '<img class="search-thumb" src="' + (it.thumbnail || '') + '" alt="">' +
+        '<div class="search-meta">' +
+          '<div class="search-title">' + escapeHtml(title) + '</div>' +
+          '<div class="search-channel">' + escapeHtml(it.channel || '') + '</div>' +
+        '</div>' +
+        '<button class="search-btn search-play" title="Запустить">▶</button>' +
+        '<button class="search-btn search-save" title="В сохранёнки">＋</button>';
+      card.querySelector('.search-play').addEventListener('click', function () {
+        loadSavedItem({ url: it.url, service: 'youtube', title: title, thumbnail: it.thumbnail });
+      });
+      card.querySelector('.search-save').addEventListener('click', function () {
+        addToSaved(it.url, title);
+      });
+      results.appendChild(card);
+    });
+  } catch (e) {
+    results.innerHTML = '<div class="search-status">ошибка: ' + (e && e.message) + '</div>';
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+  });
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  var inp = document.getElementById('saved-search-input');
+  if (inp) inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') searchSubmit(); });
+});
+
+// ─── SAVE-CURRENT-TRACK button (next to #sc-track-title) ────────────────────
+function getCurrentPlayingItem() {
+  // 1) YT iframe — track via ytVideoData captured from infoDelivery
+  if (activePlayer === 0 && typeof ytVideoData !== 'undefined' && ytVideoData && ytVideoData.video_id) {
+    return {
+      url: 'https://www.youtube.com/watch?v=' + ytVideoData.video_id,
+      title: ytVideoData.title || '',
+      thumbnail: 'https://i.ytimg.com/vi/' + ytVideoData.video_id + '/hqdefault.jpg',
+      service: 'youtube',
+    };
+  }
+  // 2) SC widget — getCurrentSound is async, this path returns a promise then
+  return null;
+}
+
+function saveCurrentTrack() {
+  // YT branch — sync via ytVideoData
+  var item = getCurrentPlayingItem();
+  if (item && item.url) {
+    addToSaved(item.url, item.title);
+    return;
+  }
+  // SC branch — pull via widget API
+  if (activePlayer === 1 && scWidget && typeof scWidget.getCurrentSound === 'function') {
+    try {
+      scWidget.getCurrentSound(function (sound) {
+        if (!sound || !sound.permalink_url) return;
+        addToSaved(sound.permalink_url, sound.title || '');
+      });
+      return;
+    } catch (e) { console.warn('saveCurrentTrack SC threw:', e && e.message); }
+  }
+  console.warn('saveCurrentTrack: nothing to save (activePlayer=' + activePlayer + ')');
+}
 function hideSavedSheet() { hideSavedPanel(); }
 
 // ─── SC URL INPUT: also adds to saved ───────────────────────────────────────

@@ -177,11 +177,17 @@
         <div id="saved-panel-hdr">
           <button id="saved-add-btn" onclick="showGuestQR()" title="Добавить">＋</button>
           <span id="saved-panel-title">Saved</span>
+          <button id="saved-search-btn" onclick="toggleSearchInput()" title="Поиск музыки">🔍</button>
         </div>
         <div id="saved-add-row">
           <input id="saved-add-input" type="url" placeholder="soundcloud.com · youtube.com · spotify.com" spellcheck="false">
           <button id="saved-add-ok">▶</button>
         </div>
+        <div id="saved-search-row">
+          <input id="saved-search-input" type="text" placeholder="что слушаем — артист, трек, жанр" spellcheck="false">
+          <button id="saved-search-ok" onclick="searchSubmit()">→</button>
+        </div>
+        <div id="search-results"></div>
         <div id="saved-edit-bar">
           <button id="saved-edit-done" onclick="exitSavedEdit()">Готово</button>
         </div>
@@ -248,7 +254,10 @@
   <div id="sc-ctrl-right">
     <img id="sc-art" src="" alt="">
     <div id="sc-track-info">
-      <div id="sc-track-title">—</div>
+      <div id="sc-track-title-row">
+        <div id="sc-track-title">—</div>
+        <button id="sc-save-current" onclick="saveCurrentTrack()" title="В сохранёнки">＋</button>
+      </div>
       <div id="sc-track-artist"></div>
     </div>
     <input id="sc-vol" type="range" min="0" max="100" value="80" title="Громкость">
