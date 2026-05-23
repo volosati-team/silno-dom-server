@@ -1649,9 +1649,13 @@ function loadSavedItemIframe(item) {
     } else {
       art.src = ''; art.classList.add('yt-icon'); art.style.background = '';
     }
+    // For single-video URLs append &list=RD<vid> to spawn a YouTube Mix
+    // playlist (auto-DJ): autoplay-next picks similar music tracks. Mix
+    // lives as long as the seed video isn't deleted/private.
+    // Explicit playlist URLs (m3) keep their own list, no Mix wrapping.
     if (m3) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/videoseries?list=' + m3[1] + '&autoplay=1&enablejsapi=1';
-    else if (m1) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m1[1] + '?autoplay=1&enablejsapi=1';
-    else if (m2) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m2[1] + '?autoplay=1&enablejsapi=1';
+    else if (m1) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m1[1] + '?list=RD' + m1[1] + '&autoplay=1&enablejsapi=1';
+    else if (m2) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m2[1] + '?list=RD' + m2[1] + '&autoplay=1&enablejsapi=1';
   } else if (item.service === 'soundcloud') {
     setMediaTab(1);
     scLoadInWidget(item.url);
