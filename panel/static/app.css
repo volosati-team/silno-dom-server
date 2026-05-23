@@ -833,22 +833,37 @@ html, body {
 /* ============== INLINE CONSOLE ============== */
 /* Console is OFF by default everywhere. Logged-in user enables it via the
    menu toggle (#menu-console-toggle). Visibility is controlled solely by the
-   .shown class — added/removed by the JS toggle. */
+   .shown class — added/removed by the JS toggle.
+   Layout: stays between #header (top) and #sc-controls (bottom) so the
+   user always has clean access to the menu button and the player bar.
+   z-index 100 sits below header (200), media-clip (110), menu/overlay
+   (300/310) and sc-controls (160) — when the menu opens it covers the
+   console, and the sc bar stays visible underneath. */
 #console-pane {
-  position: fixed; bottom: 0; right: 0;
+  position: fixed;
   background: #000; color: #b8ffb8;
   font: 11px/1.35 ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
   border: 1px solid #1a1a1a; box-sizing: border-box;
-  z-index: 99999; display: flex; flex-direction: column;
+  z-index: 100; display: flex; flex-direction: column;
   transition: transform 0.2s ease;
   transform: translate(100%, 100%);
 }
 #console-pane.shown { transform: translate(0, 0); }
 @media (orientation: landscape) {
-  #console-pane { top: 0; right: 0; width: 25vw; height: 100vh; border-left: 1px solid #1a1a1a; }
+  #console-pane {
+    top: var(--hh); right: 0;
+    bottom: 96px;
+    width: 25vw;
+    border-left: 1px solid #1a1a1a;
+  }
 }
 @media (orientation: portrait) {
-  #console-pane { left: 0; right: 0; bottom: 0; height: 25vh; width: 100vw; border-top: 1px solid #1a1a1a; }
+  #console-pane {
+    left: 0; right: 0;
+    bottom: 96px;
+    height: 25vh;
+    border-top: 1px solid #1a1a1a;
+  }
 }
 #console-show { display: none !important; }
 #console-toolbar {
