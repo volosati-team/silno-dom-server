@@ -601,6 +601,13 @@ function scPlayPause() {
 function scPrev() {
   console.log('scPrev: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null'));
   if (activePlayer === 3) {
+    // If current item resolved into a playlist (e.g. SC profile), walk
+    // back inside that playlist first. Hit the start → jump to previous
+    // saved-list entry.
+    if (nativeCurrent && nativeCurrent.playlist_items && nativeCurrent.playlist_idx > 0) {
+      nativePlayPlaylistIndex(nativeCurrent.playlist_idx - 1);
+      return;
+    }
     var idx = nativeSavedIndex();
     if (idx > 0) loadSavedItem(savedList[idx - 1]);
     return;
@@ -612,6 +619,12 @@ function scPrev() {
 function scNext() {
   console.log('scNext: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null'));
   if (activePlayer === 3) {
+    // Walk forward inside the resolved playlist first; fall through to
+    // next saved-list entry once playlist is exhausted.
+    if (nativeCurrent && nativeCurrent.playlist_items && nativeCurrent.playlist_idx + 1 < nativeCurrent.playlist_items.length) {
+      nativePlayPlaylistIndex(nativeCurrent.playlist_idx + 1);
+      return;
+    }
     var idx = nativeSavedIndex();
     if (idx >= 0 && idx + 1 < savedList.length) loadSavedItem(savedList[idx + 1]);
     return;
@@ -619,6 +632,53 @@ function scNext() {
   if (activePlayer === 0) ytCmd('nextVideo');
   else if (scWidget) scWidget.next();
   else console.warn('scNext: no handler');
+}
+
+// Resolve a specific track inside the current playlist and play it.
+// Reuses the unlock state of nativeAudio; no fresh gesture needed because
+// audio element is already engaged from the parent loadSavedItem click.
+async function nativePlayPlaylistIndex(idx) {
+  if (!nativeCurrent || !nativeCurrent.playlist_items) return;
+  if (idx < 0 || idx >= nativeCurrent.playlist_items.length) return;
+  var entry = nativeCurrent.playlist_items[idx];
+  if (!entry || !entry.url) return;
+  console.log('native: playlist jump idx=' + idx + ' url=' + entry.url);
+  try {
+    var r = await fetch('/api/stream/resolve?url=' + encodeURIComponent(entry.url));
+    if (!r.ok) {
+      console.warn('native: playlist resolve http ' + r.status);
+      return;
+    }
+    var d = await r.json();
+    if (!d || !d.stream_url) {
+      console.warn('native: playlist resolve no stream_url');
+      return;
+    }
+    var audio = ensureNativeAudio();
+    audio.loop = false;
+    audio.src = d.stream_url;
+    nativeCurrent.playlist_idx = idx;
+    nativeCurrent.resolved_at = Date.now();
+    nativeCurrent.expires_at = d.expires_at ? d.expires_at * 1000 : (Date.now() + 240 * 1000);
+    var titleEl = document.getElementById('sc-track-title');
+    if (titleEl) titleEl.textContent = cleanTitle(d.title || entry.title || '');
+    if (d.thumbnail || entry.thumbnail) {
+      var art = document.getElementById('sc-art');
+      if (art) {
+        art.classList.remove('yt-icon');
+        art.style.background = '';
+        art.src = d.thumbnail || entry.thumbnail;
+      }
+    }
+    try {
+      var p = audio.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(function(e) { console.warn('native: playlist play() rejected:', e && e.message); });
+      }
+    } catch(e) { console.warn('native: playlist play() threw:', e); }
+  } catch(e) {
+    console.warn('native: playlist resolve threw:', e && e.message);
+  }
 }
 
 document.getElementById('sc-prog').addEventListener('click', e => {
@@ -1155,6 +1215,14 @@ function ensureNativeAudio() {
   nativeAudio.addEventListener('ended', function() {
     console.log('native: ended');
     if (activePlayer === 3) setBarPlayPauseIcon(false);
+    // 1) Walk forward inside the resolved playlist if there are still
+    //    unplayed items.
+    if (nativeCurrent && nativeCurrent.playlist_items && nativeCurrent.playlist_idx + 1 < nativeCurrent.playlist_items.length) {
+      console.log('native: advancing inside playlist to idx=' + (nativeCurrent.playlist_idx + 1));
+      nativePlayPlaylistIndex(nativeCurrent.playlist_idx + 1);
+      return;
+    }
+    // 2) Otherwise jump to the next saved-list entry.
     if (typeof savedList !== 'undefined' && savedList.length && currentSavedUrl) {
       var idx = savedList.findIndex(function(it) { return it.url === currentSavedUrl; });
       if (idx >= 0 && idx + 1 < savedList.length) {
@@ -1188,7 +1256,7 @@ async function nativeReresolveAndPlay(item, isRetry) {
       console.warn('native: resolve no stream_url', d && d.error);
       return false;
     }
-    console.log('native: resolve ok', d.title || item.url);
+    console.log('native: resolve ok', d.title || item.url, d.is_playlist ? ('(playlist ' + (d.items ? d.items.length : 0) + ' items)') : '');
     var audio = ensureNativeAudio();
     // Turn off the unlock loop before swapping to the real stream URL,
     // otherwise the track would loop forever at end.
@@ -1200,6 +1268,11 @@ async function nativeReresolveAndPlay(item, isRetry) {
       item: item,
       resolved_at: Date.now(),
       expires_at: d.expires_at ? d.expires_at * 1000 : (Date.now() + 240 * 1000),
+      // Playlist navigation: when streaming returns is_playlist + items,
+      // keep the items array and current index so scPrev/scNext can walk
+      // tracks INSIDE the playlist, not just jump between saved-list entries.
+      playlist_items: (d.is_playlist && Array.isArray(d.items)) ? d.items : null,
+      playlist_idx: 0,
     };
     if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
     if (d.thumbnail) {
