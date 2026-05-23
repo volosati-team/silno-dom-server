@@ -450,6 +450,8 @@ document.addEventListener('DOMContentLoaded', function() {
 const SC_REDIRECT = location.origin + '/';
 let scWidget = null;
 let scIsPlaying = false;  // tracked via SC widget PLAY/PAUSE/FINISH events
+var scTimeCurMs = 0;      // last known SC position in ms
+var ytTimeCurSec = 0;     // last known YT position in seconds
 let scLikesOpen = false;
 
 const scFrame      = document.getElementById('sc-frame');
@@ -617,6 +619,7 @@ function scBindWidget(frame) {
     setBarPlayPauseIcon(false); fill.style.width = '0%'; tCur.textContent = '0:00';
   });
   scWidget.bind(SC.Widget.Events.PLAY_PROGRESS, e => {
+    scTimeCurMs = e.currentPosition;
     fill.style.width = (e.relativePosition * 100) + '%';
     tCur.textContent = scFmtTime(e.currentPosition);
   });
@@ -980,6 +983,7 @@ window.addEventListener('message', e => {
       else if (d.info.title) ytApplyVideoData(d.info);
       if (d.info.duration > 0) ytDuration = d.info.duration;
       if (d.info.currentTime !== undefined && ytDuration > 0) {
+        ytTimeCurSec = d.info.currentTime;
         const pct = (d.info.currentTime / ytDuration) * 100;
         document.getElementById('sc-prog-fill').style.width = pct + '%';
         document.getElementById('sc-time-cur').textContent = scFmtTime(d.info.currentTime * 1000);
@@ -2029,7 +2033,7 @@ scApplyActiveAccount();
 scUpdateAccountsMenu();
 
 // Saved playlists init
-(async () => { await savedLoad(); renderSavedList(); savedRefreshThumbnails(); })();
+(async () => { await savedLoad(); renderSavedList(); savedRefreshThumbnails(); restorePlaybackState(); })();
 
 // Background thumbnail refresh for items saved before thumbnail support
 async function savedRefreshThumbnails() {
@@ -2053,31 +2057,78 @@ async function savedRefreshThumbnails() {
   if (changed) { savedSave(); renderSavedList(); }
 }
 
-// Restore last SC track on startup — load widget silently, bar appears on first PLAY
-(function restoreLastTrack() {
-  const url = localStorage.getItem('sc_last_url');
-  if (!url) return;
-  currentSavedUrl = url;
-  renderSavedList();
-  const ph = document.getElementById('sc-placeholder');
-  if (ph) ph.classList.add('hidden');
-  const enc = encodeURIComponent(url);
-  scFrame.src = 'https://w.soundcloud.com/player/?url=' + enc + '&color=%23fff500&auto_play=false&visual=true&show_comments=false&show_reposts=false&show_teaser=false';
-  scInitWidgetApi(() => { scBindWidget(scFrame); });
-  // Pre-populate bar from oEmbed while widget loads
-  fetch('/api/oembed?url=' + encodeURIComponent(url))
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
+// ─── PLAYBACK STATE PERSISTENCE ─────────────────────────────────────────────
+// Save current track URL, position, and play state every 5s so page reload
+// resumes from approximately the same position.
+function savePlaybackState() {
+  if (!currentSavedUrl) return;
+  var isPlaying = activePlayer === 0 ? ytPlaying : (activePlayer === 1 ? scIsPlaying : false);
+  var timeMs = activePlayer === 0 ? Math.round(ytTimeCurSec * 1000) : (activePlayer === 1 ? scTimeCurMs : 0);
+  try {
+    localStorage.setItem('playback_resume', JSON.stringify({
+      url: currentSavedUrl, was_playing: isPlaying, time_ms: timeMs
+    }));
+  } catch(_) {}
+}
+setInterval(savePlaybackState, 5000);
+window.addEventListener('beforeunload', savePlaybackState);
+
+function restorePlaybackState() {
+  var state;
+  try { state = JSON.parse(localStorage.getItem('playback_resume') || 'null'); } catch(_) { state = null; }
+  if (!state || !state.url) {
+    // Fallback: restore last SC URL silently (old behaviour)
+    var scUrl = localStorage.getItem('sc_last_url');
+    if (!scUrl) return;
+    currentSavedUrl = scUrl;
+    renderSavedList();
+    var ph = document.getElementById('sc-placeholder');
+    if (ph) ph.classList.add('hidden');
+    scFrame.src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(scUrl) + '&color=%23fff500&auto_play=false&visual=true&show_comments=false&show_reposts=false&show_teaser=false';
+    scInitWidgetApi(function() { scBindWidget(scFrame); });
+    fetch('/api/oembed?url=' + encodeURIComponent(scUrl)).then(function(r) { return r.json(); }).then(function(d) {
       if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
-      if (d.thumbnail_url) {
-        const art = document.getElementById('sc-art');
-        art.classList.remove('yt-icon');
-        art.style.background = '';
-        art.src = d.thumbnail_url;
-      }
-    })
-    .catch(function() {});
-})();
+      if (d.thumbnail_url) { var a = document.getElementById('sc-art'); a.classList.remove('yt-icon'); a.style.background = ''; a.src = d.thumbnail_url; }
+    }).catch(function() {});
+    return;
+  }
+
+  var item = savedList.find(function(it) { return it.url === state.url; });
+  if (!item) return;
+  currentSavedUrl = state.url;
+  renderSavedList();
+  applySavedItemBarPreview(item);
+  var startSec = state.time_ms ? Math.max(0, Math.floor(state.time_ms / 1000) - 3) : 0;
+
+  if (item.service === 'youtube') {
+    setMediaTab(0);
+    var url = item.url;
+    var m1 = url.match(/youtu\.be\/([^?&#]+)/);
+    var m2 = url.match(/[?&]v=([^&#]+)/);
+    var m3 = url.match(/[?&]list=([^&#]+)/);
+    var vid = m1 ? m1[1] : (m2 ? m2[1] : null);
+    var src = '';
+    if (m3) src = 'https://www.youtube-nocookie.com/embed/videoseries?list=' + m3[1] + '&autoplay=1&enablejsapi=1';
+    else if (vid) src = 'https://www.youtube-nocookie.com/embed/' + vid + '?list=RD' + vid + '&autoplay=1&enablejsapi=1' + (startSec > 5 ? '&start=' + startSec : '');
+    if (src) document.getElementById('yt-frame').src = src;
+  } else if (item.service === 'soundcloud') {
+    setMediaTab(1);
+    scFrame.src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(item.url) + '&color=%23fff500&auto_play=false&visual=true&show_comments=false&show_reposts=false&show_teaser=false';
+    scInitWidgetApi(function() {
+      scBindWidget(scFrame);
+      var seekDone = false;
+      scWidget.bind(SC.Widget.Events.READY, function() {
+        if (seekDone) return; seekDone = true;
+        if (startSec > 5) { try { scWidget.seekTo(state.time_ms - 3000); } catch(_) {} }
+        if (state.was_playing) { setTimeout(function() { try { scWidget.play(); } catch(_) {} }, 400); }
+      });
+    });
+    fetch('/api/oembed?url=' + encodeURIComponent(item.url)).then(function(r) { return r.json(); }).then(function(d) {
+      if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
+      if (d.thumbnail_url) { var a = document.getElementById('sc-art'); a.classList.remove('yt-icon'); a.style.background = ''; a.src = d.thumbnail_url; }
+    }).catch(function() {});
+  }
+}
 
 // Guest paste field
 document.getElementById('guest-paste-ok').addEventListener('click', guestPasteSubmit);

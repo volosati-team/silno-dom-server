@@ -434,7 +434,7 @@ html, body {
 .svc-ico {
   width: 36px; height: 36px; flex-shrink: 0;
   border-radius: 6px; display: flex; align-items: center; justify-content: center;
-  font-size: 18px; font-weight: 800;
+  font-size: 18px; font-weight: 400;
 }
 .svc-ico.yt { background: #f00; color: #fff; }
 .svc-ico.sc { background: var(--yellow); color: #000; }
@@ -650,11 +650,11 @@ html, body {
 }
 #sc-ctrl-left {
   display: flex; align-items: center; gap: 2px;
-  flex-shrink: 0;
+  flex: 1; justify-content: center; min-width: 0; overflow: visible;
 }
 #sc-ctrl-center {
-  flex: 0 0 260px; display: flex; align-items: center; gap: 8px;
-  padding: 0 14px;
+  flex: 2; display: flex; align-items: center; gap: 8px;
+  padding: 0 14px; border-left: 1px solid var(--border);
 }
 #sc-ctrl-right {
   display: flex; align-items: center; gap: 10px;
