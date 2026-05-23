@@ -514,10 +514,14 @@ function scFmtTime(ms) {
 }
 
 let scShuffleOn = false, scRepeatOn = false;
+function safeWidgetCall(fnName, arg) {
+  if (!scWidget || typeof scWidget[fnName] !== 'function') return;
+  try { scWidget[fnName](arg); } catch(e) { console.warn('SC ' + fnName + ' threw:', e && e.message); }
+}
 function scToggleShuffle() {
   scShuffleOn = !scShuffleOn;
   document.getElementById('sc-shuffle').classList.toggle('on', scShuffleOn);
-  if (scWidget) scWidget.setShuffle(scShuffleOn);
+  safeWidgetCall('setShuffle', scShuffleOn);
 }
 function scSetVolume(val) { if (scWidget) scWidget.setVolume(parseInt(val)); }
 document.getElementById('sc-vol').addEventListener('input', e => {
@@ -529,7 +533,7 @@ document.getElementById('sc-vol').addEventListener('input', e => {
 function scToggleRepeat() {
   scRepeatOn = !scRepeatOn;
   document.getElementById('sc-repeat').classList.toggle('on', scRepeatOn);
-  if (scWidget) scWidget.setRepeat(scRepeatOn);
+  safeWidgetCall('setRepeat', scRepeatOn);
 }
 
 function scBindWidget(frame) {
@@ -542,8 +546,8 @@ function scBindWidget(frame) {
   scWidget.bind(SC.Widget.Events.READY, () => {
     scWidget.getCurrentSound(scUpdateTrackInfo);
     scWidget.getDuration(d => { tDur.textContent = scFmtTime(d); });
-    if (scShuffleOn) scWidget.setShuffle(true);
-    if (scRepeatOn)  scWidget.setRepeat(true);
+    if (scShuffleOn) safeWidgetCall('setShuffle', true);
+    if (scRepeatOn)  safeWidgetCall('setRepeat', true);
   });
   scWidget.bind(SC.Widget.Events.PLAY, () => {
     scIsPlaying = true;
