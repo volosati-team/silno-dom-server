@@ -97,8 +97,24 @@
   }, true);
 
   window._lisaClearConsole = function(){ if (body) body.innerHTML = ''; };
-  window._lisaToggleConsole = function(){ var p = document.getElementById('console-pane'); if (!p) return; if (window.matchMedia && window.matchMedia('(orientation: portrait)').matches) { p.classList.toggle('shown'); } else { p.classList.toggle('hidden'); } };
-  window._lisaShowConsole = function(){ var p = document.getElementById('console-pane'); if (!p) return; if (window.matchMedia && window.matchMedia('(orientation: portrait)').matches) { p.classList.add('shown'); } else { p.classList.remove('hidden'); } };
+  // Console is hidden by default — the user toggles it via the menu
+  // (#menu-console-toggle). State persists in localStorage.
+  function applyConsoleVisible(on){
+    var p = document.getElementById('console-pane');
+    if (!p) return;
+    if (on) p.classList.add('shown'); else p.classList.remove('shown');
+  }
+  window._lisaSetConsoleEnabled = function(on){
+    try { localStorage.setItem('console_enabled', on ? '1' : '0'); } catch(_) {}
+    applyConsoleVisible(on);
+  };
+  window._lisaConsoleEnabled = function(){
+    try { return localStorage.getItem('console_enabled') === '1'; } catch(_) { return false; }
+  };
+  ready(function(){ applyConsoleVisible(window._lisaConsoleEnabled()); });
+  // Legacy entry points kept as no-ops so existing onclicks don't blow up.
+  window._lisaToggleConsole = function(){ window._lisaSetConsoleEnabled(!window._lisaConsoleEnabled()); };
+  window._lisaShowConsole   = function(){ window._lisaSetConsoleEnabled(true); };
 })();
 
 // ── Server-side error/log uploader for old browsers (Chrome 72 etc.) ─────────
@@ -1723,3 +1739,39 @@ async function savedRefreshThumbnails() {
 // Guest paste field
 document.getElementById('guest-paste-ok').addEventListener('click', guestPasteSubmit);
 document.getElementById('guest-paste-input').addEventListener('keydown', e => { if (e.key === 'Enter') guestPasteSubmit(); });
+
+// ─── AUTO-RELOAD ON SERVER CHANGES ──────────────────────────────────────────
+// Poll /api/version every 60s. If app.js mtime changed on the server, the
+// wall panel is running stale JS — reload to pick up the new bundle.
+// Bromite and other aggressive HTML5 caches refuse to re-fetch index.html
+// for an open SPA tab on their own, so this is the only reliable way to
+// roll out a deploy without manual force-reload.
+(function () {
+  var bootVersion = null;
+  fetch('/api/version').then(function (r) { return r.json(); })
+    .then(function (d) { bootVersion = d && d.app_js; })
+    .catch(function () {});
+  setInterval(function () {
+    fetch('/api/version').then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (bootVersion && d && d.app_js && d.app_js !== bootVersion) {
+          console.log('panel updated server-side, reloading');
+          location.reload();
+        }
+      })
+      .catch(function () {});
+  }, 60000);
+})();
+
+// ─── CONSOLE TOGGLE IN MENU (logged-in only) ────────────────────────────────
+(function () {
+  function ready(cb){ if (document.readyState !== 'loading') cb(); else document.addEventListener('DOMContentLoaded', cb); }
+  ready(function () {
+    var input = document.getElementById('console-toggle-input');
+    if (!input) return;
+    input.checked = window._lisaConsoleEnabled && window._lisaConsoleEnabled();
+    input.addEventListener('change', function () {
+      window._lisaSetConsoleEnabled(this.checked);
+    });
+  });
+})();

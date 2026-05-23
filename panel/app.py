@@ -558,6 +558,17 @@ async def api_dbg_log_recent():
 # Mounted after the API so /api/* takes precedence.
 # ---------------------------------------------------------------------------
 
+@app.get("/api/version", include_in_schema=False)
+async def api_version():
+    # Used by the panel JS to detect server-side asset changes and trigger
+    # an automatic page reload without manual cache busting.
+    return json_response({
+        "app_js": int((STATIC_DIR / "app.js").stat().st_mtime),
+        "app_css": int((STATIC_DIR / "app.css").stat().st_mtime),
+        "index_html": int((STATIC_DIR / "index.html").stat().st_mtime),
+    })
+
+
 @app.get("/", include_in_schema=False)
 async def root_index():
     # Rewrite static-asset cache keys to the current mtime so Bromite (and any
