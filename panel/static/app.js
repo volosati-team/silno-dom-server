@@ -148,8 +148,8 @@
   window.addEventListener('unhandledrejection', function(e) {
     send({ type: 'rejection', reason: (e.reason && e.reason.stack ? e.reason.stack : e.reason) + '' });
   });
-  // Hook console.error and console.warn
-  var origErr = console.error, origWarn = console.warn;
+  // Hook console.error, console.warn, console.log
+  var origErr = console.error, origWarn = console.warn, origLog = console.log;
   console.error = function() {
     try { send({ type: 'console.error', args: Array.prototype.slice.call(arguments).map(String) }); } catch(e){}
     return origErr.apply(console, arguments);
@@ -157,6 +157,10 @@
   console.warn = function() {
     try { send({ type: 'console.warn', args: Array.prototype.slice.call(arguments).map(String) }); } catch(e){}
     return origWarn.apply(console, arguments);
+  };
+  console.log = function() {
+    try { send({ type: 'console.log', args: Array.prototype.slice.call(arguments).map(String) }); } catch(e){}
+    return origLog.apply(console, arguments);
   };
 })();
 
@@ -543,14 +547,20 @@ function scBindWidget(frame) {
   });
   scWidget.bind(SC.Widget.Events.PLAY, () => {
     scIsPlaying = true;
+    console.warn('SC event PLAY');
     scShowBar();
     setBarPlayPauseIcon(true);
     scWidget.getCurrentSound(scUpdateTrackInfo);
     scWidget.getDuration(d => { tDur.textContent = scFmtTime(d); });
   });
-  scWidget.bind(SC.Widget.Events.PAUSE, () => { scIsPlaying = false; setBarPlayPauseIcon(false); });
+  scWidget.bind(SC.Widget.Events.PAUSE, () => {
+    scIsPlaying = false;
+    console.warn('SC event PAUSE');
+    setBarPlayPauseIcon(false);
+  });
   scWidget.bind(SC.Widget.Events.FINISH, () => {
     scIsPlaying = false;
+    console.warn('SC event FINISH');
     setBarPlayPauseIcon(false); fill.style.width = '0%'; tCur.textContent = '0:00';
   });
   scWidget.bind(SC.Widget.Events.PLAY_PROGRESS, e => {
@@ -636,7 +646,7 @@ function nativeSavedIndex() {
 }
 
 function scPlayPause() {
-  console.log('scPlayPause: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null') + ' ytPlaying=' + ytPlaying + ' nativePaused=' + (nativeAudio ? nativeAudio.paused : 'n/a'));
+  console.log('scPlayPause: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null') + ' ytPlaying=' + ytPlaying + ' scIsPlaying=' + scIsPlaying + ' nativePaused=' + (nativeAudio ? nativeAudio.paused : 'n/a'));
   // Cold-start case: after a page refresh nothing has been loaded yet but
   // currentSavedUrl is restored from saved-list. First tap on the bar's
   // play-pause should kick the player by loading the current saved item.
@@ -660,12 +670,13 @@ function scPlayPause() {
   }
   if (activePlayer === 0) { ytPlaying ? ytCmd('pauseVideo') : ytCmd('playVideo'); }
   else if (scWidget) {
-    // SC widget .toggle() consults an internal state that can desync from
-    // our PLAY/PAUSE events (especially after src swaps), which made the
-    // bar's play act as "no-op". Use our own scIsPlaying flag for the
-    // play/pause split instead.
-    if (scIsPlaying) { try { scWidget.pause(); } catch(e) { console.warn('SC pause threw:', e); } }
-    else             { try { scWidget.play();  } catch(e) { console.warn('SC play threw:',  e); } }
+    if (scIsPlaying) {
+      console.warn('scPlayPause: calling scWidget.pause()');
+      try { scWidget.pause(); } catch(e) { console.warn('SC pause threw:', e); }
+    } else {
+      console.warn('scPlayPause: calling scWidget.play()');
+      try { scWidget.play(); } catch(e) { console.warn('SC play threw:', e); }
+    }
   }
   else console.warn('scPlayPause: no handler — activePlayer=' + activePlayer + ' scWidget missing');
 }
