@@ -1116,7 +1116,10 @@ function ensureNativeAudio() {
   nativeAudio = document.createElement('audio');
   nativeAudio.id = 'native-audio';
   nativeAudio.preload = 'auto';
-  nativeAudio.crossOrigin = 'anonymous';
+  // No crossOrigin — SoundCloud cf-media.sndcdn.com signed URLs don't return
+  // CORS headers, and `anonymous` then makes Bromite reject the source with
+  // MediaError.code=4 (MEDIA_ELEMENT_ERROR_SRC_NOT_SUPPORTED). Plain audio
+  // playback works without CORS; we don't need WebAudio analysis here.
   nativeAudio.style.display = 'none';
   document.body.appendChild(nativeAudio);
   nativeAudio.addEventListener('play', function() {
@@ -1187,6 +1190,9 @@ async function nativeReresolveAndPlay(item, isRetry) {
     }
     console.log('native: resolve ok', d.title || item.url);
     var audio = ensureNativeAudio();
+    // Turn off the unlock loop before swapping to the real stream URL,
+    // otherwise the track would loop forever at end.
+    audio.loop = false;
     audio.src = d.stream_url;
     activePlayer = 3;
     nativeCurrent = {
@@ -1248,23 +1254,28 @@ async function tryNativePlay(item) {
 // later gets rejected with "user didn't interact". We start a synchronous
 // muted play of this empty WAV first, which arms the audio element for
 // subsequent src swaps without needing another gesture.
-var NATIVE_UNLOCK_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+// 200ms silent WAV (8kHz mono 8-bit). Plays in a loop while resolve happens
+// so the audio element stays ACTIVELY PLAYING through the async window.
+// First-time play() must be inside the click gesture; once playback has
+// started, subsequent src swaps + play() calls don't need a fresh gesture.
+var NATIVE_UNLOCK_WAV = 'data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YUAGAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA';
 var nativeUnlocked = false;
 
 function nativePrimeForGesture() {
   if (nativeUnlocked) return;
   var audio = ensureNativeAudio();
-  // Unmuted play of a 0-sample WAV inside the gesture window. This consumes
-  // the user-gesture token and engages the audio element for the page's
-  // lifetime, so subsequent src swaps + play() calls work without a fresh
-  // gesture. The WAV is silent — no audible click.
+  // Loop a 200ms silent WAV so the audio element stays in "playing" state
+  // through the async resolve. Once Chromium has seen play() succeed inside
+  // a user gesture, src swaps + play() on the same element no longer need a
+  // fresh gesture — playback continues uninterrupted.
   try {
     audio.src = NATIVE_UNLOCK_WAV;
+    audio.loop = true;
     var p = audio.play();
     if (p && typeof p.then === 'function') {
       p.then(function() {
         nativeUnlocked = true;
-        console.log('native: unlocked');
+        console.log('native: unlocked (loop primed)');
       }).catch(function(e) {
         console.warn('native: unlock play rejected:', e && e.message);
       });
