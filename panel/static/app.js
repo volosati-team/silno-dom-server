@@ -1620,6 +1620,9 @@ function loadSavedItem(item) {
   hideSavedPanel();
   currentSavedUrl = item.url;
   renderSavedList();
+  // Mirror highlight onto any matching search-result card so user sees
+  // which result is currently playing.
+  try { applySearchActive(item.url); } catch(_) {}
 
   // SYNC: instant UI update so the bar shows the new item's art/title even
   // before resolve finishes. Otherwise the bar keeps the previous item.
@@ -1800,6 +1803,7 @@ async function searchSubmit() {
         '<button class="search-btn search-save" title="В сохранёнки">＋</button>';
       card.addEventListener('click', function () {
         loadSavedItem({ url: it.url, service: 'youtube', title: title, thumbnail: it.thumbnail });
+        applySearchActive(it.url);
       });
       var saveBtn = card.querySelector('.search-save');
       saveBtn.addEventListener('click', function (ev) {
@@ -1864,6 +1868,9 @@ function probeEmbeddable(vid, cardEl) {
   }
   function handler(e) {
     if (!e || typeof e.data !== 'string') return;
+    // Only react to messages from THIS probe iframe — without this every
+    // onError from the main #yt-frame would also fire all in-flight probes.
+    if (e.source !== probe.contentWindow) return;
     if (!e.origin || !/youtube(-nocookie)?\.com$/.test(new URL(e.origin).hostname)) return;
     try {
       var d = JSON.parse(e.data);
@@ -1892,6 +1899,17 @@ function probeEmbeddable(vid, cardEl) {
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, function (c) {
     return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+  });
+}
+
+function applySearchActive(activeUrl) {
+  var cards = document.querySelectorAll('#search-results .search-item');
+  cards.forEach(function (el) {
+    var btn = el.querySelector('.search-save');
+    // url is stored on the click handler closure; reconstruct from data-vid
+    var vid = el.dataset.vid;
+    var url = 'https://www.youtube.com/watch?v=' + vid;
+    el.classList.toggle('active', url === activeUrl);
   });
 }
 

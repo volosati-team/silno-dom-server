@@ -338,6 +338,7 @@ html, body {
   transition: background 0.1s;
 }
 .search-item:active { background: #ffffff08; }
+.search-item.active .search-title { color: var(--yellow); }
 .search-item-probing { opacity: 0.6; transition: opacity 0.3s; }
 .search-item-probing::after {
   content: ''; width: 8px; height: 8px; border-radius: 50%;
