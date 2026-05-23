@@ -190,6 +190,7 @@ var lastActiveZone = null;
 function closeMediaPanel() {
   medOpen = false;
   mediaClip.classList.remove('open');
+  zoneClip.classList.remove('constrained');
   document.getElementById('sc-expand-btn').classList.remove('open');
   // Never leave the screen blank — fall back to the last active zone (or yard).
   if (!activeZone) {
@@ -206,7 +207,12 @@ function closeMediaPanel() {
 }
 function openMediaPanel() {
   medOpen = true;
-  closeZone();
+  if (activeZone) {
+    // Keep zone visible as one-row ctrl-btn strip
+    zoneClip.classList.add('constrained');
+  } else {
+    closeZone();
+  }
   mediaClip.classList.add('open');
   document.getElementById('sc-expand-btn').classList.add('open');
   if (window.innerWidth <= 700) showSavedPanel();
@@ -233,7 +239,7 @@ function closeZone() {
   if (activeZone) lastActiveZone = activeZone;
   activeZone = null;
   document.querySelectorAll('.ztab').forEach(t => t.classList.remove('active'));
-  zoneClip.classList.remove('open');
+  zoneClip.classList.remove('open', 'constrained');
 }
 
 // ── Zone tabs ─────────────────────────────────────────────────────────────────

@@ -10,9 +10,10 @@
   --muted:   #7a7a9a;
   --text:    #dde0f8;
 
-  --hh:  40px;
-  --zh:  46px;
-  --mh:  60px;
+  --hh:    40px;
+  --zh:    46px;
+  --mh:    60px;
+  --row-h: 80px;
 }
 
 html, body {
@@ -95,6 +96,15 @@ html, body {
 }
 #zone-clip.open { pointer-events: auto; }
 
+/* zone constrained to one ctrl-btn row when media panel is also open */
+#zone-clip.constrained {
+  bottom: calc(100vh - var(--hh) - var(--zh) - var(--row-h));
+}
+/* media panel starts below the ctrl-btn row when zone is constrained */
+#zone-clip.constrained ~ #media-clip.open {
+  top: calc(var(--hh) + var(--zh) + var(--row-h));
+}
+
 #zone-inner {
   height: 100%;
   overflow: hidden;
@@ -132,12 +142,15 @@ html, body {
 .ctrl-btn {
   border-radius: 12px; border: 1px solid var(--border);
   background: #111120;
+  position: relative;
   display: flex; flex-direction: column; align-items: flex-start;
-  padding: 14px 14px 12px;
-  gap: 10px; cursor: pointer;
+  justify-content: center;
+  padding: 10px 14px 10px 14px;
+  gap: 6px; cursor: pointer;
+  height: 56px;
+  min-width: 140px;
   transition: background 0.18s, border-color 0.18s;
   -webkit-tap-highlight-color: transparent;
-  min-height: 96px;
 }
 .ctrl-btn:active { opacity: 0.8; }
 
@@ -171,21 +184,16 @@ html, body {
   color: var(--muted); line-height: 1;
 }
 
-/* device state indicator */
-.dev-row {
-  display: flex; align-items: center; gap: 5px;
-  margin-top: auto;
-}
+/* device state dot — absolute top-left corner */
 .dev-dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: #333; flex-shrink: 0;
+  position: absolute;
+  top: 8px; left: 8px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #333;
 }
 .dev-dot.on  { background: #4ade80; }
 .dev-dot.off { background: #f87171; }
-.dev-lbl {
-  font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase;
-  color: #4a4a68;
-}
 
 /* ─── MEDIA CONTENT (slides UP) ──────────────────────────────────────────── */
 #media-clip {
