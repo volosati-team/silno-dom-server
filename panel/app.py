@@ -15,6 +15,7 @@ Storage: SQLite file at panel/data/panel.db (created on first start).
 import asyncio
 import json
 import os
+import re
 import sqlite3
 import time
 import uuid
@@ -353,11 +354,13 @@ async def api_guest_submit(request: Request):
         return json_response({}, status=400)
     session_id = body.get("session_id")
     media_url = body.get("url")
+    title = body.get("title")
     if not session_id or not media_url:
         return json_response({}, status=400)
     if kv_get(f"guest:{session_id}") is None:
         return json_response({"error": "session_expired"}, status=410)
-    kv_put(f"guest:{session_id}:url", media_url, ttl=60)
+    payload = json.dumps({"url": media_url, "title": title or None})
+    kv_put(f"guest:{session_id}:payload", payload, ttl=60)
     return json_response({"ok": True})
 
 
@@ -366,6 +369,14 @@ async def api_guest_poll(request: Request):
     sid = request.query_params.get("session")
     if not sid:
         return text_response("null")
+    payload = kv_get(f"guest:{sid}:payload")
+    if payload:
+        kv_delete(f"guest:{sid}:payload")
+        try:
+            return json_response(json.loads(payload))
+        except Exception:
+            return json_response({"url": payload})
+    # Backwards-compat: old guest pages that submitted url-only land here.
     media_url = kv_get(f"guest:{sid}:url")
     if media_url:
         kv_delete(f"guest:{sid}:url")
@@ -549,7 +560,20 @@ async def api_dbg_log_recent():
 
 @app.get("/", include_in_schema=False)
 async def root_index():
-    return _serve_static("index.html", media_type="text/html; charset=utf-8")
+    # Rewrite static-asset cache keys to the current mtime so Bromite (and any
+    # other aggressive HTML5 cache) re-fetches app.css/app.js whenever we
+    # actually changed them. Without this the wall panel keeps running stale
+    # JS until the user manually force-reloads.
+    path = STATIC_DIR / "index.html"
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="not found")
+    html = path.read_text(encoding="utf-8")
+    css_v = int((STATIC_DIR / "app.css").stat().st_mtime)
+    js_v = int((STATIC_DIR / "app.js").stat().st_mtime)
+    html = re.sub(r"app\.css\?v=\d+", f"app.css?v={css_v}", html)
+    html = re.sub(r"app\.js\?v=\d+", f"app.js?v={js_v}", html)
+    return Response(content=html, media_type="text/html; charset=utf-8",
+                    headers={"Cache-Control": "no-cache, must-revalidate"})
 
 
 @app.get("/guest", include_in_schema=False)

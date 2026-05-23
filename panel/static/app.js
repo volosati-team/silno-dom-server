@@ -1036,7 +1036,7 @@ async function fetchMeta(url) {
   }
 }
 
-async function addToSaved(url) {
+async function addToSaved(url, overrideTitle) {
   url = await resolveUrl(url);
   const service = detectService(url);
   if (!service) return;
@@ -1044,7 +1044,8 @@ async function addToSaved(url) {
   const meta = await fetchMeta(url);
   const existing = savedList.findIndex(i => i.url === url);
   if (existing >= 0) { savedList.splice(existing, 1); }
-  savedList.unshift({ id: Date.now(), url, service, title: meta.title, thumbnail: meta.thumbnail });
+  const title = (overrideTitle && overrideTitle.trim()) ? overrideTitle.trim() : meta.title;
+  savedList.unshift({ id: Date.now(), url, service, title: title, thumbnail: meta.thumbnail });
   savedSave();
   renderSavedList();
   loadSavedItem(savedList[0]);
@@ -1617,7 +1618,7 @@ async function showGuestQR() {
         if (pd && pd.url) {
           clearInterval(guestPollInterval); guestPollInterval = null;
           hideGuestQR();
-          await addToSaved(pd.url);
+          await addToSaved(pd.url, pd.title);
         }
       } catch {}
     }, 2000);
