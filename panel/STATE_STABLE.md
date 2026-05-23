@@ -129,16 +129,74 @@ IP изменится после переезда.
 **NOTES_migration.md:** чеклист на переезд сервера — credentials,
 сервисы, базы, что тестить после миграции.
 
-## Открытые задачи (после merge ветки в main)
+## Session end snapshot — 2026-05-24 01:38 MSK
 
-1. **SC polling-retry** вместо фиксированного 2500ms timeout. План в
+Ветка `feat/saved-panel-search` HEAD — `2db505e`. Не в main (PR не делала
+без explicit approval). На voloNuk также `2db505e`, panel uvicorn PID
+обновляется при рестарте `set -a; . .env; set +a; uvicorn` — после
+рестарта контейнера нужно re-запустить с .env (issue lisa-core #406).
+
+**Что протестировано в этой сессии (видел Андрей):**
+- ✓ SC widget autoplay (через muted gesture prime + event-driven force-play)
+- ✓ YT iframe handshake (playerState читается из infoDelivery)
+- ✓ YT Mix-playlist `list=RD<vid>` для auto-DJ
+- ✓ Cache-busting + auto-reload polling (mtime на 3 файла)
+- ✓ Console layout (top var(--hh), bottom 96px, z=170)
+- ✓ Plus-button QR-flow для add-from-phone
+- ✓ Menu links target=_blank
+- ✓ Saved-panel sizing ×3, шрифты/thumb ×2
+- ✓ Lupa-button + inline search input (Enter работает)
+- ✓ /api/search YT Data API music category
+- ✓ Tap-on-card play, ＋ save (stopPropagation)
+- ✓ Save-current-track ＋ в баре (×2 size)
+- ✓ Server heuristic Stage A — drop VEVO / embeddable=false / age /
+  region=RU. Smoke: «despacito» → drops 2/12.
+- ✓ TDD harness `panel/tests/test_yt_filter.py` зелёный для 5/6
+  known fixtures (PSY проходит — handled by Stage B)
+
+**Деплоено в commit `2db505e`, не протестировано Андреем после fix'а:**
+- Stage B (client iframe probe) — `e.source === probe.contentWindow`
+  check, чтобы probe handler не реагировал на onError от main #yt-frame.
+  В предыдущем варианте onError приходили (видел в dbg-log), но карточки
+  не удалялись из-за race с main iframe handler.
+- Active highlight (`.search-item.active`) на результат когда играет —
+  жёлтый title. applySearchActive() вызывается из click и из loadSavedItem.
+
+**Открытые задачи (backlog):**
+
+1. Дотестировать Stage B probe после reload — Unheilig/PSY должны
+   исчезать из результатов в течение 4 секунд (timeout fallback) или
+   быстрее (onError 150). Если probe всё ещё не справляется → Stage C.
+2. **Stage C — playwright headless probe** на voloNuk или на компе
+   Андрея (он дал доступ через bridge). Сервер-side ground truth +
+   SQLite cache по video_id 7д. Откладываю до подтверждения что
+   Stage B не покрывает.
+3. **SC polling-retry** вместо фиксированного 2500ms timeout. План в
    `NOTES_autoplay_switch.md`.
-2. **SC search** в `/api/search?src=soundcloud` (фаза 2 — нужен
+4. **SC search** в `/api/search?src=soundcloud` (фаза 2 — нужен
    `SC_CLIENT_ID` + SC search endpoint).
-3. **Громкость popup-slider** UI в стиле Telegram-голосовых.
-4. **`LIGHT_API_TOKEN` auth** на `/api/light/*` (отдельный токен от
+5. **Громкость popup-slider** UI в стиле Telegram-голосовых.
+6. **`LIGHT_API_TOKEN` auth** на `/api/light/*` (отдельный токен от
    `AG_BRIDGE_SECRET`, чтобы давать сторонним агентам только свет).
-5. **Native audio fallback для embed-restricted YT** (см.
+7. **Native audio fallback для embed-restricted YT** (см.
    `NOTES_embed_restricted.md` — пока на backend отфильтровываем).
-6. **YT music filter «без мусора»** — Mix-плейлист хорошо работает,
+8. **YT music filter «без мусора»** — Mix-плейлист хорошо работает,
    но иногда сыпет non-music. Метрика mood/genre — отдельная история.
+
+**Связанные lisa-core issue:**
+
+- **#405** — useragents AGENT_INSTRUCTIONS нужно явно описать правило
+  подписи «Это Андрей, пишу через своего агента (Лису)».
+- **#406** — queue_runner.py должен крутиться автоматом (после рестарта
+  контейнера + watchdog). Текущий fix — ручной `nohup` фоном, не
+  переживёт перезагрузку.
+
+**Как восстанавливаться после рестарта контейнера:**
+
+1. `cd /home/superlisa/workspace/projects/silno-dom-server && git status`
+   — должна быть ветка `feat/saved-panel-search` HEAD `2db505e`.
+2. Panel uvicorn на voloNuk сам поднимется через
+   `VoloNuk_StartSilnoServer` Scheduled Task (он делает `bash start.sh`,
+   там `source .env` есть). YOUTUBE_API_KEY в `.env`, AG_BRIDGE_SECRET
+   в Windows env vars.
+3. Queue_runner.py для userbot — нужно поднять вручную (см. #406).
