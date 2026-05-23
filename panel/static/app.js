@@ -166,10 +166,23 @@ function setZoneSlide(zone) {
   zoneTrack.style.transform  = `translateX(-${idx * 20}%)`;
 }
 
+var lastActiveZone = null;
 function closeMediaPanel() {
   medOpen = false;
   mediaClip.classList.remove('open');
   document.getElementById('sc-expand-btn').classList.remove('open');
+  // Never leave the screen blank — fall back to the last active zone (or yard).
+  if (!activeZone) {
+    var z = lastActiveZone || 'yard';
+    var tab = document.querySelector('.ztab[data-zone="' + z + '"]');
+    if (tab) {
+      document.querySelectorAll('.ztab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      activeZone = z;
+      setZoneSlide(z);
+      zoneClip.classList.add('open');
+    }
+  }
 }
 function openMediaPanel() {
   medOpen = true;
@@ -197,6 +210,7 @@ function toggleSavedPanel() {
 }
 
 function closeZone() {
+  if (activeZone) lastActiveZone = activeZone;
   activeZone = null;
   document.querySelectorAll('.ztab').forEach(t => t.classList.remove('active'));
   zoneClip.classList.remove('open');
@@ -512,13 +526,13 @@ function scBindWidget(frame) {
   });
   scWidget.bind(SC.Widget.Events.PLAY, () => {
     scShowBar();
-    pp.textContent = '⏸';
+    setBarPlayPauseIcon(true);
     scWidget.getCurrentSound(scUpdateTrackInfo);
     scWidget.getDuration(d => { tDur.textContent = scFmtTime(d); });
   });
-  scWidget.bind(SC.Widget.Events.PAUSE, () => { pp.textContent = '▶'; });
+  scWidget.bind(SC.Widget.Events.PAUSE, () => { setBarPlayPauseIcon(false); });
   scWidget.bind(SC.Widget.Events.FINISH, () => {
-    pp.textContent = '▶'; fill.style.width = '0%'; tCur.textContent = '0:00';
+    setBarPlayPauseIcon(false); fill.style.width = '0%'; tCur.textContent = '0:00';
   });
   scWidget.bind(SC.Widget.Events.PLAY_PROGRESS, e => {
     fill.style.width = (e.relativePosition * 100) + '%';
@@ -643,7 +657,13 @@ function scPrev() {
     if (idx > 0) loadSavedItem(savedList[idx - 1]);
     return;
   }
-  if (activePlayer === 0) ytCmd('previousVideo');
+  if (activePlayer === 0) {
+    // Walk saved-list first — single-video embeds don't react to
+    // previousVideo and we want prev/next to flow between saved items.
+    var idx = nativeSavedIndex();
+    if (idx > 0) { loadSavedItem(savedList[idx - 1]); return; }
+    ytCmd('previousVideo');
+  }
   else if (scWidget) scWidget.prev();
   else console.warn('scPrev: no handler');
 }
@@ -660,7 +680,11 @@ function scNext() {
     if (idx >= 0 && idx + 1 < savedList.length) loadSavedItem(savedList[idx + 1]);
     return;
   }
-  if (activePlayer === 0) ytCmd('nextVideo');
+  if (activePlayer === 0) {
+    var idx = nativeSavedIndex();
+    if (idx >= 0 && idx + 1 < savedList.length) { loadSavedItem(savedList[idx + 1]); return; }
+    ytCmd('nextVideo');
+  }
   else if (scWidget) scWidget.next();
   else console.warn('scNext: no handler');
 }
@@ -785,7 +809,7 @@ window.addEventListener('message', e => {
     const d = JSON.parse(typeof e.data === 'string' ? e.data : '{}');
     if (d.event === 'onStateChange') {
       ytPlaying = d.info === 1;
-      document.getElementById('sc-playpause').textContent = ytPlaying ? '⏸' : '▶';
+      setBarPlayPauseIcon(ytPlaying);
     }
     if (d.event === 'infoDelivery' && d.info) {
       // YT sends title in videoData sub-object
@@ -1197,9 +1221,11 @@ let nativeAudio = null;
 let nativeCurrent = null;     // { url, item, resolved_at, expires_at }
 let nativeReresolveTimer = null;
 
+var ICON_PLAY  = '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+var ICON_PAUSE = '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
 function setBarPlayPauseIcon(playing) {
   var el = document.getElementById('sc-playpause');
-  if (el) el.textContent = playing ? '⏸' : '▶';
+  if (el) el.innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
 }
 
 function ensureNativeAudio() {
@@ -1516,9 +1542,9 @@ function loadSavedItemIframe(item) {
     } else {
       art.src = ''; art.classList.add('yt-icon'); art.style.background = '';
     }
-    if (m3) document.getElementById('yt-frame').src = 'https://www.youtube.com/embed/videoseries?list=' + m3[1] + '&autoplay=1&enablejsapi=1';
-    else if (m1) document.getElementById('yt-frame').src = 'https://www.youtube.com/embed/' + m1[1] + '?autoplay=1&enablejsapi=1';
-    else if (m2) document.getElementById('yt-frame').src = 'https://www.youtube.com/embed/' + m2[1] + '?autoplay=1&enablejsapi=1';
+    if (m3) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/videoseries?list=' + m3[1] + '&autoplay=1&enablejsapi=1';
+    else if (m1) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m1[1] + '?autoplay=1&enablejsapi=1';
+    else if (m2) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m2[1] + '?autoplay=1&enablejsapi=1';
   } else if (item.service === 'soundcloud') {
     setMediaTab(1);
     scLoadInWidget(item.url);
