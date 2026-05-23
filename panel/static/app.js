@@ -599,8 +599,29 @@ async function scLoadInWidget(url, autoplay = true) {
     scShowBar();
     pauseYT();
     try { localStorage.setItem('sc_last_url', url); } catch(e) {}
-    scWidget.load(url, { auto_play: true, show_comments: false, show_reposts: false, show_teaser: false }, function() {
+    // Autoplay after .load() needs event-based forcing because Bromite
+    // ignores auto_play option and the .load() callback path doesn't
+    // get past its autoplay policy. Set a one-shot LOAD_PROGRESS hook
+    // — first buffer event from the new URL = the widget actually
+    // started loading the track, so .play() now has the gesture-bridge
+    // it needs. Safety net at 2500ms in case neither callback nor
+    // LOAD_PROGRESS fires.
+    var playForced = false;
+    function forcePlay(reason) {
+      if (playForced) return;
+      playForced = true;
+      console.warn('scLoadInWidget: forcing play via ' + reason);
       try { scWidget.play(); } catch (e) { console.warn('SC play() failed:', e); }
+    }
+    var lpHandler = function () {
+      try { scWidget.unbind(SC.Widget.Events.LOAD_PROGRESS); } catch(_) {}
+      forcePlay('LOAD_PROGRESS');
+    };
+    try { scWidget.bind(SC.Widget.Events.LOAD_PROGRESS, lpHandler); } catch(_) {}
+    setTimeout(function(){ forcePlay('timeout-2500ms'); }, 2500);
+    scWidget.load(url, { auto_play: true, show_comments: false, show_reposts: false, show_teaser: false }, function() {
+      console.log('scLoadInWidget: .load() callback fired');
+      forcePlay('load-callback');
     });
     return;
   }
