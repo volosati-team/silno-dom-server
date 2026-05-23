@@ -1238,10 +1238,17 @@ function ensureNativeAudio() {
   nativeAudio.addEventListener('error', function() {
     var err = nativeAudio.error;
     console.warn('native: error code=' + (err && err.code), 'src=' + nativeAudio.currentSrc);
-    if (nativeCurrent && nativeCurrent.item) {
-      // Stream URL probably expired or 4xx — re-resolve once.
-      nativeReresolveAndPlay(nativeCurrent.item, true);
+    if (!nativeCurrent || !nativeCurrent.item) return;
+    // Limit re-resolve cascades: only one retry per item per error window
+    // to avoid endless loops when the source URL itself is broken / unsupported.
+    var now = Date.now();
+    if (nativeCurrent._errRetryAt && (now - nativeCurrent._errRetryAt) < 30000) {
+      console.warn('native: error retry suppressed (cooldown)');
+      return;
     }
+    nativeCurrent._errRetryAt = now;
+    // Re-resolve src but respect pause state — never autoplay on error.
+    nativeReresolveAndPlay(nativeCurrent.item, true, true);
   });
   nativeAudio.addEventListener('ended', function() {
     console.log('native: ended');
@@ -1275,7 +1282,7 @@ function nativeStop() {
   setBarPlayPauseIcon(false);
 }
 
-async function nativeReresolveAndPlay(item, isRetry) {
+async function nativeReresolveAndPlay(item, isRetry, respectPauseState) {
   try {
     var r = await fetch('/api/stream/resolve?url=' + encodeURIComponent(item.url));
     if (!r.ok) {
@@ -1289,6 +1296,10 @@ async function nativeReresolveAndPlay(item, isRetry) {
     }
     console.log('native: resolve ok', d.title || item.url, d.is_playlist ? ('(playlist ' + (d.items ? d.items.length : 0) + ' items)') : '');
     var audio = ensureNativeAudio();
+    // Capture pause state BEFORE src swap so pre-emptive re-resolve does not
+    // unpause a track the user explicitly paused.
+    var wasPaused = audio.paused;
+    var prevTime = audio.currentTime;
     // Turn off the unlock loop before swapping to the real stream URL,
     // otherwise the track would loop forever at end.
     audio.loop = false;
@@ -1309,27 +1320,54 @@ async function nativeReresolveAndPlay(item, isRetry) {
     if (d.thumbnail) {
       var art = document.getElementById('sc-art');
       if (art) {
-        art.classList.remove('yt-icon');
-        art.style.background = '';
-        art.src = d.thumbnail;
+        // Prefer JPG over WEBP — Bromite v108 sometimes fails on i.ytimg.com webp.
+        // If the saved-list item already gave us a JPG thumbnail, keep that.
+        var dt = d.thumbnail;
+        var itemThumb = item && item.thumbnail;
+        var keepItemThumb = itemThumb && /\.jpg(\?|$)/i.test(itemThumb) && /\.webp(\?|$)/i.test(dt);
+        if (!keepItemThumb) {
+          art.classList.remove('yt-icon');
+          art.style.background = '';
+          art.src = dt;
+          art.onerror = function() {
+            // Last-ditch: if webp/jpg fails, fall back to vi/{id}/mqdefault.jpg
+            this.onerror = null;
+            if (item && item.url) {
+              var vm = item.url.match(/[?&]v=([^&#]+)/) || item.url.match(/youtu\.be\/([^?&#]+)/);
+              if (vm) { this.src = 'https://i.ytimg.com/vi/' + vm[1] + '/hqdefault.jpg'; return; }
+            }
+            this.src = '';
+            this.classList.add('yt-icon');
+          };
+        }
       }
     }
-    try {
-      // Must be called synchronously in the click-gesture chain on first hit.
-      var p = audio.play();
-      if (p && typeof p.catch === 'function') {
-        p.catch(function(e) { console.warn('native: play() rejected:', e && e.message); });
+    if (respectPauseState && wasPaused) {
+      console.log('native: re-resolve skipped autoplay — user paused');
+      // Restore position if we have a non-zero prevTime, since src swap reset it.
+      if (prevTime > 0) {
+        var restorePos = function() { try { audio.currentTime = prevTime; } catch(_) {} audio.removeEventListener('loadedmetadata', restorePos); };
+        audio.addEventListener('loadedmetadata', restorePos);
       }
-    } catch(e) {
-      console.warn('native: play() threw:', e);
+    } else {
+      try {
+        // Must be called synchronously in the click-gesture chain on first hit.
+        var p = audio.play();
+        if (p && typeof p.catch === 'function') {
+          p.catch(function(e) { console.warn('native: play() rejected:', e && e.message); });
+        }
+      } catch(e) {
+        console.warn('native: play() threw:', e);
+      }
     }
-    // Schedule a pre-emptive re-resolve ~30s before expiry.
+    // Schedule a pre-emptive re-resolve ~30s before expiry. Pass
+    // respectPauseState=true so the timer does NOT unpause user-paused tracks.
     if (nativeReresolveTimer) clearTimeout(nativeReresolveTimer);
     var leadMs = Math.max(30 * 1000, (nativeCurrent.expires_at - Date.now()) - 30 * 1000);
     nativeReresolveTimer = setTimeout(function() {
       if (nativeCurrent && nativeCurrent.item === item) {
         console.log('native: pre-emptive re-resolve');
-        nativeReresolveAndPlay(item, false);
+        nativeReresolveAndPlay(item, false, true);
       }
     }, leadMs);
     return true;
@@ -1342,7 +1380,16 @@ async function nativeReresolveAndPlay(item, isRetry) {
 async function tryNativePlay(item) {
   // Quick host check — skip resolver for services we know it can't help with.
   var u = (item.url || '').toLowerCase();
-  if (!/soundcloud\.com|snd\.sc|youtube\.com|youtu\.be|music\.yandex\.|spotify\.com/.test(u)) {
+  // SoundCloud, Spotify, Yandex Music: prefer the native iframe widget for
+  // visual UI (cover art, track list, official controls). Throne already
+  // routes us to a US exit so widgets load fine. Native audio fallback was
+  // confusing — black screen with sound but no UI.
+  if (/soundcloud\.com|snd\.sc|spotify\.com|music\.yandex\./.test(u)) {
+    return false;
+  }
+  // YT only via native resolver — iframe embeds are too unreliable across
+  // region/embed restrictions, audio extraction works better.
+  if (!/youtube\.com|youtu\.be/.test(u)) {
     return false;
   }
   ensureNativeAudio();
@@ -1407,6 +1454,17 @@ function applySavedItemBarPreview(item) {
   art.removeAttribute('src');
   if (item.thumbnail) {
     art.src = item.thumbnail;
+    art.onerror = function() {
+      this.onerror = null;
+      // Fall back to the canonical YT thumbnail URL (works through tinyproxy/Throne).
+      var vm = (item.url || '').match(/[?&]v=([^&#]+)/) || (item.url || '').match(/youtu\.be\/([^?&#]+)/);
+      if (vm && item.service === 'youtube') {
+        this.src = 'https://i.ytimg.com/vi/' + vm[1] + '/hqdefault.jpg';
+      } else {
+        this.removeAttribute('src');
+        this.classList.add('yt-icon');
+      }
+    };
   } else if (item.service === 'youtube') {
     var m1 = (item.url || '').match(/youtu\.be\/([^?&#]+)/);
     var m2 = (item.url || '').match(/[?&]v=([^&#]+)/);
