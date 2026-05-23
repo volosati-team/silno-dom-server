@@ -58,15 +58,30 @@
   console.error = function(){ append('error', Array.prototype.slice.call(arguments)); orig.error.apply(console, arguments); };
   window.addEventListener('error', function(e){ append('error', ['JS error:', e.message, 'at', e.filename+':'+e.lineno]); });
   window.addEventListener('unhandledrejection', function(e){ append('error', ['Unhandled rejection:', String(e.reason)]); });
+  // URLs that flood the inline console with polling noise — skip them in
+  // the visible log, but still let the request go through normally.
+  // We log everything in the original DevTools console (via passthrough).
+  var QUIET_FETCH_PATTERNS = [
+    /\/api\/light\/state(\?|$)/,
+    /\/api\/dbg-log(\?|$)/,
+  ];
+  function isQuietFetch(url) {
+    for (var i = 0; i < QUIET_FETCH_PATTERNS.length; i++) {
+      if (QUIET_FETCH_PATTERNS[i].test(url)) return true;
+    }
+    return false;
+  }
   var origFetch = window.fetch;
   window.fetch = function(){
     var url = typeof arguments[0] === 'string' ? arguments[0] : (arguments[0] && arguments[0].url) || '';
     var method = (arguments[1] && arguments[1].method) || 'GET';
-    append('net', ['→', method, url]);
+    var quiet = isQuietFetch(url);
+    if (!quiet) append('net', ['→', method, url]);
     return origFetch.apply(window, arguments).then(function(r){
-      append('net', ['←', r.status, method, url]);
+      if (!quiet) append('net', ['←', r.status, method, url]);
       return r;
     }).catch(function(e){
+      // Errors are always shown, even for quiet endpoints.
       append('error', ['✖', method, url, String(e)]);
       throw e;
     });
@@ -589,6 +604,22 @@ function nativeSavedIndex() {
 
 function scPlayPause() {
   console.log('scPlayPause: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null') + ' ytPlaying=' + ytPlaying + ' nativePaused=' + (nativeAudio ? nativeAudio.paused : 'n/a'));
+  // Cold-start case: after a page refresh nothing has been loaded yet but
+  // currentSavedUrl is restored from saved-list. First tap on the bar's
+  // play-pause should kick the player by loading the current saved item.
+  if (!nativeCurrent && !scWidget && !ytPlaying) {
+    var savedIdx = nativeSavedIndex();
+    if (savedIdx >= 0) {
+      console.log('scPlayPause: cold-start, kick loadSavedItem idx=' + savedIdx);
+      loadSavedItem(savedList[savedIdx]);
+      return;
+    } else if (typeof savedList !== 'undefined' && savedList.length) {
+      // No currentSavedUrl — play first saved item.
+      console.log('scPlayPause: cold-start, kick first saved item');
+      loadSavedItem(savedList[0]);
+      return;
+    }
+  }
   if (activePlayer === 3 && nativeAudio) {
     if (nativeAudio.paused) { try { nativeAudio.play(); } catch(e) {} }
     else { try { nativeAudio.pause(); } catch(e) {} }
