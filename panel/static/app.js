@@ -913,6 +913,16 @@ window.addEventListener('message', e => {
       setBarPlayPauseIcon(ytPlaying);
     }
     if (d.event === 'infoDelivery' && d.info) {
+      // YT nocookie embed pipes playerState through infoDelivery.info
+      // instead of a separate onStateChange event. State codes:
+      // -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued.
+      if (typeof d.info.playerState !== 'undefined') {
+        var playing = d.info.playerState === 1;
+        if (playing !== ytPlaying) {
+          ytPlaying = playing;
+          setBarPlayPauseIcon(ytPlaying);
+        }
+      }
       // YT sends title in videoData sub-object
       if (d.info.videoData) ytApplyVideoData(d.info.videoData);
       // Fallback: some builds send at top level
