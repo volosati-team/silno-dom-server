@@ -683,9 +683,14 @@ function ytCmd(func, args) {
     if (!f) return;
     f.addEventListener('load', function () {
       try {
+        // YT iframe API expects a numeric id for the listening handshake.
+        // Send both variants — some embed builds accept string, some only
+        // numeric. Cost is one extra postMessage.
         f.contentWindow.postMessage(
-          JSON.stringify({ event: 'listening', id: 'panel', channel: 'widget' }), '*');
-        console.log('YT listening handshake sent');
+          JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
+        f.contentWindow.postMessage(
+          JSON.stringify({ event: 'listening', id: '1', channel: 'widget' }), '*');
+        console.log('YT listening handshake sent (numeric + string)');
       } catch (e) { console.warn('YT listening send threw:', e && e.message); }
     });
   });
@@ -895,6 +900,11 @@ function ytApplyVideoData(vd) {
 
 // Listen for YT iframe events
 window.addEventListener('message', e => {
+  // Diagnostic: surface YT-side messages even when activePlayer != 0 so we
+  // can see whether iframe responds to the listening handshake at all.
+  if (typeof e.data === 'string' && e.origin && /youtube(-nocookie)?\.com$/.test(new URL(e.origin).hostname)) {
+    console.log('YT msg:', e.data.slice(0, 240));
+  }
   if (activePlayer !== 0) return;
   try {
     const d = JSON.parse(typeof e.data === 'string' ? e.data : '{}');
