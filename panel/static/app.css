@@ -137,7 +137,7 @@ html, body {
   scrollbar-width: none;
   padding: 16px 14px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
   gap: 10px;
   align-content: start;
 }
@@ -653,12 +653,12 @@ html, body {
   flex-shrink: 0;
 }
 #sc-ctrl-center {
-  flex: 1; display: flex; align-items: center; gap: 8px;
-  padding: 0 14px; min-width: 0;
+  flex: 0 0 260px; display: flex; align-items: center; gap: 8px;
+  padding: 0 14px;
 }
 #sc-ctrl-right {
   display: flex; align-items: center; gap: 10px;
-  flex-shrink: 0; max-width: 320px;
+  flex: 1; min-width: 0;
   padding-left: 14px; border-left: 1px solid var(--border);
   position: relative;
 }
@@ -684,7 +684,7 @@ html, body {
 #sc-track-artist { font-size: 20px; color: var(--muted); letter-spacing: 0.04em; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-btn {
   background: none; border: none;
-  width: 80px; height: 80px; border-radius: 50%;
+  width: 68px; height: 68px; border-radius: 50%;
   color: var(--muted); font-size: 38px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: color 0.15s; flex-shrink: 0;
