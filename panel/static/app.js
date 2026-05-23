@@ -1564,17 +1564,7 @@ function loadSavedItemIframe(item) {
     else if (m2) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m2[1] + '?autoplay=1&enablejsapi=1';
   } else if (item.service === 'soundcloud') {
     setMediaTab(1);
-    // Force iframe src directly with auto_play=true so the autoplay
-    // permission rides the user-gesture token at navigation time.
-    // scWidget.load() over postMessage runs out of gesture and Bromite
-    // ignores subsequent play() calls (SC starts, then auto-pauses).
-    const scFrame = document.getElementById('sc-frame');
-    const enc = encodeURIComponent(item.url);
-    scFrame.src = `https://w.soundcloud.com/player/?url=${enc}&color=%23fff500&auto_play=true&visual=true&show_comments=false&show_reposts=false&show_teaser=false`;
-    document.getElementById('sc-placeholder').classList.add('hidden');
-    scShowBar();
-    try { localStorage.setItem('sc_last_url', item.url); } catch(e) {}
-    scInitWidgetApi(() => scBindWidget(scFrame));
+    scLoadInWidget(item.url);
   } else if (item.service === 'spotify') {
     setMediaTab(2);
     const embedUrl = item.url.replace('open.spotify.com/', 'open.spotify.com/embed/');
