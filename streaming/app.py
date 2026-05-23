@@ -125,6 +125,13 @@ def _validate_url(url: str) -> Optional[str]:
 
 def _is_playlist_url(url: str) -> bool:
     low = url.lower()
+    # Yandex Music: /album/<id>/track/<id> is a single track despite the
+    # `/album/` token in the URL. Without this guard, _is_playlist_url
+    # returns True, we route through `--flat-playlist` and yt-dlp's Yandex
+    # extractor produces a single-item bool-ish payload that crashes the
+    # downstream parser.
+    if "music.yandex." in low and "/track/" in low:
+        return False
     if any(hint in low for hint in PLAYLIST_HINTS):
         return True
     # SoundCloud profile/feed URLs — single path segment after the host means
@@ -330,7 +337,9 @@ async def _resolve_single(url: str) -> dict[str, Any]:
     rc, out, errbuf = await _run_yt_dlp(
         [
             "-f",
-            "bestaudio[ext=mp3]/bestaudio[ext=m4a]/bestaudio",
+            # Lenient: prefer mp3/m4a but accept any audio (or fallback to full).
+            # YouTube increasingly only returns webm/opus — strict selector fails.
+            "bestaudio[ext=mp3]/bestaudio[ext=m4a]/bestaudio/best",
             "--no-playlist",
             "--no-warnings",
             "-j",
