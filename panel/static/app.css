@@ -292,6 +292,8 @@ html, body {
   -webkit-tap-highlight-color: transparent;
 }
 #saved-add-btn:active, #saved-close-btn:active, #saved-search-btn:active { color: var(--yellow); }
+#saved-search-btn svg { display: block; }
+#saved-search-btn:active svg { stroke: var(--yellow); }
 
 #saved-search-row {
   display: none; gap: 6px; padding: 8px 10px;

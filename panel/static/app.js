@@ -1757,6 +1757,7 @@ function showSavedSheet() { showSavedPanel(); }
 
 // ─── SEARCH (YT Data API music search) ──────────────────────────────────────
 function toggleSearchInput() {
+  console.log('toggleSearchInput called');
   var row = document.getElementById('saved-search-row');
   var open = row.classList.toggle('show');
   if (open) {
@@ -1771,6 +1772,7 @@ function toggleSearchInput() {
 async function searchSubmit() {
   var inp = document.getElementById('saved-search-input');
   var q = (inp.value || '').trim();
+  console.log('searchSubmit q=' + JSON.stringify(q));
   if (!q) return;
   var results = document.getElementById('search-results');
   results.innerHTML = '<div class="search-status">ищу...</div>';

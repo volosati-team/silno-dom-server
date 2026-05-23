@@ -177,14 +177,19 @@
         <div id="saved-panel-hdr">
           <button id="saved-add-btn" onclick="showGuestQR()" title="Добавить">＋</button>
           <span id="saved-panel-title">Saved</span>
-          <button id="saved-search-btn" onclick="toggleSearchInput()" title="Поиск музыки">🔍</button>
+          <button id="saved-search-btn" onclick="toggleSearchInput()" title="Поиск музыки">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </button>
         </div>
         <div id="saved-add-row">
           <input id="saved-add-input" type="url" placeholder="soundcloud.com · youtube.com · spotify.com" spellcheck="false">
           <button id="saved-add-ok">▶</button>
         </div>
         <div id="saved-search-row">
-          <input id="saved-search-input" type="text" placeholder="что слушаем — артист, трек, жанр" spellcheck="false">
+          <input id="saved-search-input" type="search" placeholder="что слушаем — артист, трек, жанр" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();searchSubmit();}">
           <button id="saved-search-ok" onclick="searchSubmit()">→</button>
         </div>
         <div id="search-results"></div>
