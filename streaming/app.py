@@ -47,10 +47,18 @@ ALLOWED_HOSTS = (
 # SoundCloud signed stream URLs expire in roughly 5 minutes. Cache slightly
 # under that so we always hand out a URL with at least ~1 minute of life.
 CACHE_TTL_SEC = 240
-# yt-dlp can be slow on cold cache or large playlists. 30s matches the spec.
-YT_DLP_TIMEOUT_SEC = 30
+# yt-dlp can be slow on cold cache or large playlists, especially with browser
+# cookies extraction. 45s is safer for SC profile enumeration + YT auth flows.
+YT_DLP_TIMEOUT_SEC = 45
 
 PLAYLIST_HINTS = ("/sets/", "/playlist/", "/album/", "list=", "/playlists/")
+
+# Optional browser cookie source for yt-dlp. Set via env var; if non-empty,
+# every yt-dlp invocation gets `--cookies-from-browser <value>`. The value is
+# passed straight through, so it can be `firefox`, `brave`, or with profile
+# path like `firefox:/mnt/c/.../Mozilla/Firefox/Profiles/<profile_id>`.
+import os as _os
+YT_DLP_COOKIES_FROM_BROWSER = _os.environ.get("YT_DLP_COOKIES_FROM_BROWSER", "").strip()
 
 
 # ---------------------------------------------------------------------------
@@ -145,9 +153,12 @@ def _is_playlist_url(url: str) -> bool:
 
 async def _run_yt_dlp(args: list[str]) -> tuple[int, bytes, bytes]:
     """Spawn yt-dlp with a hard timeout. Returns (rc, stdout, stderr)."""
+    effective_args = list(args)
+    if YT_DLP_COOKIES_FROM_BROWSER:
+        effective_args = ["--cookies-from-browser", YT_DLP_COOKIES_FROM_BROWSER, *effective_args]
     proc = await asyncio.create_subprocess_exec(
         "yt-dlp",
-        *args,
+        *effective_args,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
