@@ -12,7 +12,7 @@
 
   --hh:    40px;
   --zh:    46px;
-  --mh:    60px;
+  --mh:    120px;
   --row-h: 80px;
 }
 
@@ -642,7 +642,7 @@ html, body {
 /* ─── SC PERSISTENT PLAYER BAR ──────────────────────────────────────────── */
 #sc-controls {
   position: fixed; bottom: 0; left: 0; right: 0;
-  height: 96px; z-index: 160;
+  height: 120px; z-index: 160;
   border-top: 1px solid var(--border);
   background: var(--bg2);
   display: flex; align-items: center;
@@ -658,8 +658,9 @@ html, body {
 }
 #sc-ctrl-right {
   display: flex; align-items: center; gap: 10px;
-  flex-shrink: 0; max-width: 320px; overflow: hidden;
+  flex-shrink: 0; max-width: 320px;
   padding-left: 14px; border-left: 1px solid var(--border);
+  position: relative;
 }
 #sc-prog {
   flex: 1; height: 3px; background: var(--dim);
@@ -671,8 +672,8 @@ html, body {
 }
 #sc-prog:hover { height: 5px; transition: height 0.1s; }
 #sc-time-cur, #sc-time-dur {
-  font-size: 10px; color: var(--muted); flex-shrink: 0;
-  font-variant-numeric: tabular-nums; letter-spacing: 0.03em; min-width: 30px; text-align: center;
+  font-size: 20px; color: var(--muted); flex-shrink: 0;
+  font-variant-numeric: tabular-nums; letter-spacing: 0.03em; min-width: 52px; text-align: center;
 }
 #sc-art {
   width: 72px; height: 72px; border-radius: 6px;
@@ -683,16 +684,16 @@ html, body {
 #sc-track-artist { font-size: 20px; color: var(--muted); letter-spacing: 0.04em; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-btn {
   background: none; border: none;
-  width: 68px; height: 68px; border-radius: 50%;
-  color: var(--muted); font-size: 26px; cursor: pointer;
+  width: 80px; height: 80px; border-radius: 50%;
+  color: var(--muted); font-size: 38px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: color 0.15s; flex-shrink: 0;
 }
 .sc-btn:active { color: var(--text); }
 .sc-btn.on { color: var(--yellow); }
 #sc-playpause {
-  width: 84px; height: 84px;
-  background: var(--yellow); color: #000; font-size: 30px; border-radius: 50%;
+  width: 96px; height: 96px;
+  background: var(--yellow); color: #000; font-size: 36px; border-radius: 50%;
   padding: 0;
 }
 #sc-playpause svg { display: block; }
@@ -720,20 +721,10 @@ html, body {
 }
 #sc-vol-popup.visible { opacity: 1; pointer-events: auto; }
 #sc-vol {
-  writing-mode: vertical-lr; direction: rtl;
-  -webkit-appearance: slider-vertical; appearance: slider-vertical;
-  width: 32px; height: 120px;
+  -webkit-appearance: slider-vertical;
+  width: 36px; height: 130px;
   cursor: pointer; outline: none;
-  -webkit-appearance: none; appearance: none;
-  background: transparent;
-}
-#sc-vol::-webkit-slider-runnable-track {
-  width: 4px; background: var(--dim); border-radius: 2px;
-}
-#sc-vol::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 22px; height: 22px;
-  border-radius: 50%; background: var(--yellow);
-  cursor: pointer; margin-left: -9px;
+  accent-color: var(--yellow);
 }
 
 /* Mobile SC bar: no timebar, buttons spread, compact track info */
@@ -754,14 +745,14 @@ html, body {
   #sc-art { width: 56px; height: 56px; }
   #sc-track-title  { font-size: 22px; }
   #sc-track-artist { font-size: 18px; }
-  .sc-btn { width: 72px; height: 72px; font-size: 28px; }
-  #sc-playpause { width: 76px; height: 76px; font-size: 28px; }
+  .sc-btn { width: 80px; height: 80px; font-size: 38px; }
+  #sc-playpause { width: 88px; height: 88px; }
 }
 
 /* SC expand button */
 #sc-expand-btn {
   background: none; border: none;
-  width: 36px; height: 36px; border-radius: 50%;
+  width: 52px; height: 52px; border-radius: 50%;
   color: var(--muted); font-size: 18px; line-height: 1;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   flex-shrink: 0; margin-right: 6px;
