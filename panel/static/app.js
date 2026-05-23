@@ -582,6 +582,13 @@ function pauseYT() {
 
 async function scLoadInWidget(url, autoplay = true) {
   console.log('scLoadInWidget(start):', url, 'autoplay=' + autoplay, 'scWidget=' + (scWidget ? 'ok' : 'null'));
+  // Sync UI reset: the previous track's PLAY state is meaningless for the
+  // new URL. Without this, scIsPlaying stays true while the widget is
+  // still loading the new URL, and a quick tap on bar pause fires
+  // scWidget.pause() at a half-loaded widget (no-op) — looking like
+  // "panel froze, didn't switch state".
+  scIsPlaying = false;
+  setBarPlayPauseIcon(false);
   // Sync fast path for autoplay: skip resolveUrl to keep the user-gesture
   // token alive (Chrome/mobile autoplay policy). Only short on.soundcloud.com
   // links need redirect-following — pass the rest through immediately.
