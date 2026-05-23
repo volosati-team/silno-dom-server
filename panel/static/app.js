@@ -672,6 +672,25 @@ function ytCmd(func, args) {
   } catch {}
 }
 
+// YT IFrame API handshake. Without this the iframe never sends state
+// events (onStateChange, infoDelivery) and our bar play/pause buttons
+// can't reflect actual playback state. Fires on every yt-frame src
+// change so it covers playlist switches too.
+(function () {
+  function ready(cb){ if (document.readyState !== 'loading') cb(); else document.addEventListener('DOMContentLoaded', cb); }
+  ready(function () {
+    var f = document.getElementById('yt-frame');
+    if (!f) return;
+    f.addEventListener('load', function () {
+      try {
+        f.contentWindow.postMessage(
+          JSON.stringify({ event: 'listening', id: 'panel', channel: 'widget' }), '*');
+        console.log('YT listening handshake sent');
+      } catch (e) { console.warn('YT listening send threw:', e && e.message); }
+    });
+  });
+})();
+
 function nativeSavedIndex() {
   if (typeof savedList === 'undefined' || !savedList.length || !currentSavedUrl) return -1;
   return savedList.findIndex(function(it) { return it.url === currentSavedUrl; });
@@ -1798,15 +1817,29 @@ document.getElementById('guest-paste-input').addEventListener('keydown', e => { 
 // for an open SPA tab on their own, so this is the only reliable way to
 // roll out a deploy without manual force-reload.
 (function () {
-  var bootVersion = null;
+  // Track app_js, app_css, index_html — any of them can change in a deploy
+  // (CSS-only or HTML-only deploys are common), so polling needs to react
+  // to all three otherwise stale tabs keep running outdated assets.
+  var boot = { js: null, css: null, html: null };
   fetch('/api/version').then(function (r) { return r.json(); })
-    .then(function (d) { bootVersion = d && d.app_js; })
+    .then(function (d) {
+      if (!d) return;
+      boot.js = d.app_js; boot.css = d.app_css; boot.html = d.index_html;
+    })
     .catch(function () {});
   setInterval(function () {
     fetch('/api/version').then(function (r) { return r.json(); })
       .then(function (d) {
-        if (bootVersion && d && d.app_js && d.app_js !== bootVersion) {
-          console.log('panel updated server-side, reloading');
+        if (!d) return;
+        var changed =
+          (boot.js && d.app_js && d.app_js !== boot.js) ||
+          (boot.css && d.app_css && d.app_css !== boot.css) ||
+          (boot.html && d.index_html && d.index_html !== boot.html);
+        if (changed) {
+          console.log('panel updated server-side, reloading',
+            'js', boot.js, '→', d.app_js,
+            'css', boot.css, '→', d.app_css,
+            'html', boot.html, '→', d.index_html);
           location.reload();
         }
       })
