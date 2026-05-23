@@ -1378,25 +1378,11 @@ async function nativeReresolveAndPlay(item, isRetry, respectPauseState) {
 }
 
 async function tryNativePlay(item) {
-  // Quick host check — skip resolver for services we know it can't help with.
-  var u = (item.url || '').toLowerCase();
-  // SoundCloud, Spotify, Yandex Music: prefer the native iframe widget for
-  // visual UI (cover art, track list, official controls). Throne already
-  // routes us to a US exit so widgets load fine. Native audio fallback was
-  // confusing — black screen with sound but no UI.
-  if (/soundcloud\.com|snd\.sc|spotify\.com|music\.yandex\./.test(u)) {
-    return false;
-  }
-  // YT only via native resolver — iframe embeds are too unreliable across
-  // region/embed restrictions, audio extraction works better.
-  if (!/youtube\.com|youtu\.be/.test(u)) {
-    return false;
-  }
-  ensureNativeAudio();
-  // Silence any iframe player before native takes over.
-  try { pauseYT(); } catch(e) {}
-  try { if (scWidget) scWidget.pause(); } catch(e) {}
-  return await nativeReresolveAndPlay(item, false);
+  // All known services use their own iframe widget for the visual UI.
+  // YouTube embed shows the video poster + player chrome; SC/SP/Yandex
+  // render full widgets with art and track lists. Native audio left only
+  // black sound with no picture — confusing on a wall panel.
+  return false;
 }
 
 // Silent WAV used to "unlock" the <audio> element during the click gesture.
