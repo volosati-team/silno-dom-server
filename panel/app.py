@@ -583,8 +583,14 @@ async def root_index():
     js_v = int((STATIC_DIR / "app.js").stat().st_mtime)
     html = re.sub(r"app\.css\?v=\d+", f"app.css?v={css_v}", html)
     html = re.sub(r"app\.js\?v=\d+", f"app.js?v={js_v}", html)
+    # no-store + no-cache combo bypasses Bromite's back-forward cache, which
+    # otherwise keeps a stale SPA tab alive forever even on revalidation.
     return Response(content=html, media_type="text/html; charset=utf-8",
-                    headers={"Cache-Control": "no-cache, must-revalidate"})
+                    headers={
+                        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                        "Pragma": "no-cache",
+                        "Expires": "0",
+                    })
 
 
 @app.get("/guest", include_in_schema=False)
