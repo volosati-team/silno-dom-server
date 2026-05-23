@@ -1535,21 +1535,11 @@ function loadSavedItem(item) {
   // before resolve finishes. Otherwise the bar keeps the previous item.
   applySavedItemBarPreview(item);
 
-  // SYNC: prime the audio element inside the user-gesture window. Must run
-  // before any await/promise so the gesture token is consumed by an audio
-  // play() call. Future src swaps then work without "didn't interact" errors.
-  nativePrimeForGesture();
-
-  // Try native audio first. If it succeeds we're done — no iframe needed.
-  tryNativePlay(item).then(function(ok) {
-    if (ok) {
-      console.log('native: handled', item.service, item.url);
-      return;
-    }
-    console.log('native: fallback to iframe for', item.service);
-    nativeStop();
-    loadSavedItemIframe(item);
-  });
+  // No more native unlock priming. We do not use native audio for any
+  // service — they all go to their iframe widget. The old prime+stop
+  // sequence (play silent WAV → pause it) stole Android audio focus
+  // from the SC widget, which made SC play immediately re-pause.
+  loadSavedItemIframe(item);
 }
 
 function loadSavedItemIframe(item) {
