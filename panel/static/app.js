@@ -427,6 +427,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // ── SoundCloud ────────────────────────────────────────────────────────────────
 const SC_REDIRECT = location.origin + '/';
 let scWidget = null;
+let scIsPlaying = false;  // tracked via SC widget PLAY/PAUSE/FINISH events
 let scLikesOpen = false;
 
 const scFrame      = document.getElementById('sc-frame');
@@ -541,13 +542,15 @@ function scBindWidget(frame) {
     if (scRepeatOn)  scWidget.setRepeat(true);
   });
   scWidget.bind(SC.Widget.Events.PLAY, () => {
+    scIsPlaying = true;
     scShowBar();
     setBarPlayPauseIcon(true);
     scWidget.getCurrentSound(scUpdateTrackInfo);
     scWidget.getDuration(d => { tDur.textContent = scFmtTime(d); });
   });
-  scWidget.bind(SC.Widget.Events.PAUSE, () => { setBarPlayPauseIcon(false); });
+  scWidget.bind(SC.Widget.Events.PAUSE, () => { scIsPlaying = false; setBarPlayPauseIcon(false); });
   scWidget.bind(SC.Widget.Events.FINISH, () => {
+    scIsPlaying = false;
     setBarPlayPauseIcon(false); fill.style.width = '0%'; tCur.textContent = '0:00';
   });
   scWidget.bind(SC.Widget.Events.PLAY_PROGRESS, e => {
@@ -656,7 +659,14 @@ function scPlayPause() {
     return;
   }
   if (activePlayer === 0) { ytPlaying ? ytCmd('pauseVideo') : ytCmd('playVideo'); }
-  else if (scWidget) scWidget.toggle();
+  else if (scWidget) {
+    // SC widget .toggle() consults an internal state that can desync from
+    // our PLAY/PAUSE events (especially after src swaps), which made the
+    // bar's play act as "no-op". Use our own scIsPlaying flag for the
+    // play/pause split instead.
+    if (scIsPlaying) { try { scWidget.pause(); } catch(e) { console.warn('SC pause threw:', e); } }
+    else             { try { scWidget.play();  } catch(e) { console.warn('SC play threw:',  e); } }
+  }
   else console.warn('scPlayPause: no handler — activePlayer=' + activePlayer + ' scWidget missing');
 }
 function scPrev() {
