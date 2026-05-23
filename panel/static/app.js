@@ -425,6 +425,18 @@ zoneTrack.style.transition = 'none';
 zoneTrack.style.transform  = 'translateX(0%)';
 zoneClip.classList.add('open');
 
+// Default: media panel open with constrained zone strip (no transition on init)
+zoneClip.classList.add('constrained');
+medOpen = true;
+mediaClip.classList.add('open');
+document.getElementById('sc-expand-btn').classList.add('open');
+var _mi = document.getElementById('media-inner');
+_mi.style.transition = 'none';
+requestAnimationFrame(function() { requestAnimationFrame(function() {
+  _mi.style.transition = '';
+  zoneTrack.style.transition = 'transform 0.32s cubic-bezier(0.32,0.72,0,1)';
+}); });
+
 pollState();
 setInterval(pollState, 5000);
 
