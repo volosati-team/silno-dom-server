@@ -1287,12 +1287,52 @@ function nativePrimeForGesture() {
   }
 }
 
+function applySavedItemBarPreview(item) {
+  // SYNC update of track-title + art from the saved-list item so the UI
+  // doesn't keep the previous item's image while async resolve runs.
+  // Async paths overwrite later with real metadata when it arrives.
+  var art = document.getElementById('sc-art');
+  var titleEl = document.getElementById('sc-track-title');
+  var artistEl = document.getElementById('sc-track-artist');
+  if (titleEl) titleEl.textContent = cleanTitle(item.title || '');
+  if (artistEl) artistEl.textContent = '';
+  if (!art) return;
+  // reset
+  art.classList.remove('yt-icon');
+  art.style.background = '';
+  art.removeAttribute('src');
+  if (item.thumbnail) {
+    art.src = item.thumbnail;
+  } else if (item.service === 'youtube') {
+    var m1 = (item.url || '').match(/youtu\.be\/([^?&#]+)/);
+    var m2 = (item.url || '').match(/[?&]v=([^&#]+)/);
+    var vid = m1 ? m1[1] : (m2 ? m2[1] : null);
+    if (vid) {
+      art.src = 'https://img.youtube.com/vi/' + vid + '/mqdefault.jpg';
+    } else {
+      art.classList.add('yt-icon');
+    }
+  } else if (item.service === 'yandex_music') {
+    // Yandex album/track id → mqdefault thumbnail via their CDN. Best-effort.
+    art.classList.add('yt-icon');
+    art.style.background = '#fc3f1d';
+  } else if (item.service === 'spotify') {
+    art.style.background = '#1db954';
+  } else {
+    art.classList.add('yt-icon');
+  }
+}
+
 function loadSavedItem(item) {
   console.log('loadSavedItem:', item.service, item.url);
   openMediaPanel();
   hideSavedPanel();
   currentSavedUrl = item.url;
   renderSavedList();
+
+  // SYNC: instant UI update so the bar shows the new item's art/title even
+  // before resolve finishes. Otherwise the bar keeps the previous item.
+  applySavedItemBarPreview(item);
 
   // SYNC: prime the audio element inside the user-gesture window. Must run
   // before any await/promise so the gesture token is consumed by an audio
