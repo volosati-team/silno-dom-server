@@ -658,7 +658,7 @@ html, body {
 }
 #sc-ctrl-right {
   display: flex; align-items: center; gap: 10px;
-  flex-shrink: 0; max-width: 220px; overflow: hidden;
+  flex-shrink: 0; max-width: 320px; overflow: hidden;
   padding-left: 14px; border-left: 1px solid var(--border);
 }
 #sc-prog {
@@ -675,12 +675,12 @@ html, body {
   font-variant-numeric: tabular-nums; letter-spacing: 0.03em; min-width: 30px; text-align: center;
 }
 #sc-art {
-  width: 36px; height: 36px; border-radius: 4px;
+  width: 72px; height: 72px; border-radius: 6px;
   background: var(--dim); flex-shrink: 0; object-fit: cover;
 }
 #sc-track-info { flex: 1; min-width: 0; }
-#sc-track-title { font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#sc-track-artist { font-size: 10px; color: var(--muted); letter-spacing: 0.04em; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sc-track-title { font-size: 24px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#sc-track-artist { font-size: 20px; color: var(--muted); letter-spacing: 0.04em; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sc-btn {
   background: none; border: none;
   width: 68px; height: 68px; border-radius: 50%;
@@ -697,24 +697,49 @@ html, body {
 }
 #sc-playpause svg { display: block; }
 #sc-playpause:active { opacity: 0.8; }
+/* Volume button + popup */
+#sc-vol-wrap { position: relative; flex-shrink: 0; }
+#sc-vol-btn {
+  background: none; border: none;
+  width: 52px; height: 52px; border-radius: 50%;
+  color: var(--muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: color 0.15s;
+}
+#sc-vol-btn:active, #sc-vol-btn.muted { color: var(--yellow); }
+#sc-vol-btn.muted .sc-vol-wave { display: none; }
+#sc-vol-popup {
+  position: absolute; bottom: calc(100% + 10px); left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 14px; padding: 14px 10px;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 350;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.15s;
+}
+#sc-vol-popup.visible { opacity: 1; pointer-events: auto; }
 #sc-vol {
-  width: 70px; flex-shrink: 0; cursor: pointer;
+  writing-mode: vertical-lr; direction: rtl;
+  -webkit-appearance: slider-vertical; appearance: slider-vertical;
+  width: 32px; height: 120px;
+  cursor: pointer; outline: none;
   -webkit-appearance: none; appearance: none;
-  height: 3px; background: var(--dim); border-radius: 2px; outline: none;
+  background: transparent;
+}
+#sc-vol::-webkit-slider-runnable-track {
+  width: 4px; background: var(--dim); border-radius: 2px;
 }
 #sc-vol::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 12px; height: 12px;
-  border-radius: 50%; background: var(--yellow); cursor: pointer;
-}
-#sc-vol::-moz-range-thumb {
-  width: 12px; height: 12px; border-radius: 50%;
-  background: var(--yellow); cursor: pointer; border: none;
+  -webkit-appearance: none; width: 22px; height: 22px;
+  border-radius: 50%; background: var(--yellow);
+  cursor: pointer; margin-left: -9px;
 }
 
 /* Mobile SC bar: no timebar, buttons spread, compact track info */
 @media (max-width: 520px) {
   #sc-ctrl-center { display: none; }
-  #sc-vol         { display: none; }
+  #sc-vol-wrap    { display: none; }
   #sc-ctrl-left {
     flex: 1;
     justify-content: space-between;
@@ -723,12 +748,12 @@ html, body {
   #sc-ctrl-right {
     border-left: 1px solid var(--border);
     padding-left: 10px;
-    max-width: 130px;
-    gap: 8px;
+    max-width: 200px;
+    gap: 10px;
   }
-  #sc-art { width: 28px; height: 28px; }
-  #sc-track-title  { font-size: 11px; }
-  #sc-track-artist { font-size: 9px; }
+  #sc-art { width: 56px; height: 56px; }
+  #sc-track-title  { font-size: 22px; }
+  #sc-track-artist { font-size: 18px; }
   .sc-btn { width: 72px; height: 72px; font-size: 28px; }
   #sc-playpause { width: 76px; height: 76px; font-size: 28px; }
 }

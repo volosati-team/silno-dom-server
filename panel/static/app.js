@@ -542,10 +542,41 @@ function scToggleShuffle() {
   safeWidgetCall('setShuffle', scShuffleOn);
 }
 function scSetVolume(val) { if (scWidget) scWidget.setVolume(parseInt(val)); }
-document.getElementById('sc-vol').addEventListener('input', e => {
-  if (activePlayer === 3 && nativeAudio) { nativeAudio.volume = Math.max(0, Math.min(1, parseInt(e.target.value) / 100)); return; }
-  if (activePlayer === 1) scSetVolume(e.target.value);
-  else if (activePlayer === 0) ytCmd('setVolume', [parseInt(e.target.value)]);
+function scVolSetActual(val) {
+  if (activePlayer === 3 && nativeAudio) { nativeAudio.volume = Math.max(0, Math.min(1, val / 100)); return; }
+  if (activePlayer === 1) scSetVolume(val);
+  else if (activePlayer === 0) ytCmd('setVolume', [val]);
+}
+var scMuted = false;
+var scPreMuteVol = 80;
+var scVolHideTimer = null;
+function scVolResetTimer() {
+  clearTimeout(scVolHideTimer);
+  scVolHideTimer = setTimeout(function() {
+    document.getElementById('sc-vol-popup').classList.remove('visible');
+  }, 2500);
+}
+function scVolToggle() {
+  var popup = document.getElementById('sc-vol-popup');
+  if (popup.classList.contains('visible')) {
+    scMuted = !scMuted;
+    document.getElementById('sc-vol-btn').classList.toggle('muted', scMuted);
+    if (scMuted) {
+      scPreMuteVol = parseInt(document.getElementById('sc-vol').value);
+      scVolSetActual(0);
+    } else {
+      scVolSetActual(scPreMuteVol);
+    }
+  } else {
+    popup.classList.add('visible');
+  }
+  scVolResetTimer();
+}
+document.getElementById('sc-vol').addEventListener('input', function(e) {
+  scMuted = false;
+  document.getElementById('sc-vol-btn').classList.remove('muted');
+  scVolSetActual(parseInt(e.target.value));
+  scVolResetTimer();
 });
 
 function scToggleRepeat() {
