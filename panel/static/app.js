@@ -716,6 +716,15 @@ async function scLoadInWidget(url, autoplay = true) {
 // ── Universal player controls ──────────────────────────────────────────────
 let activePlayer = 1; // 0=YT, 1=SC, 2=SP
 let ytPlaying = false, ytDuration = 0;
+var ytAutoNextTimer = null;
+function ytAutoNext() {
+  // Debounce: onStateChange(0) and infoDelivery(playerState=0) can both fire
+  if (ytAutoNextTimer) return;
+  ytAutoNextTimer = setTimeout(function() {
+    ytAutoNextTimer = null;
+    scNext();
+  }, 600);
+}
 
 function ytCmd(func, args) {
   try {
@@ -965,6 +974,12 @@ window.addEventListener('message', e => {
     if (d.event === 'onStateChange') {
       ytPlaying = d.info === 1;
       setBarPlayPauseIcon(ytPlaying);
+      if (d.info === 0) ytAutoNext();  // ended → next in panel playlist
+    }
+    if (d.event === 'onError') {
+      // Embed-restricted (101/150), removed/private (100), or other — skip to next
+      console.warn('YT embed error, code=' + d.info + ', skipping to next');
+      ytAutoNext();
     }
     if (d.event === 'infoDelivery' && d.info) {
       // YT nocookie embed pipes playerState through infoDelivery.info
@@ -976,6 +991,7 @@ window.addEventListener('message', e => {
           ytPlaying = playing;
           setBarPlayPauseIcon(ytPlaying);
         }
+        if (d.info.playerState === 0) ytAutoNext();  // ended via infoDelivery
       }
       // YT sends title in videoData sub-object
       if (d.info.videoData) ytApplyVideoData(d.info.videoData);
