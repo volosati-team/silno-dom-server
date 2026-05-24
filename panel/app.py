@@ -20,6 +20,7 @@ import sqlite3
 import time
 import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -192,12 +193,18 @@ async def lifespan(app: FastAPI):
     _init_db()
     _db()  # warm the connection
     task = asyncio.create_task(_cleanup_loop())
+    sched_task = asyncio.create_task(_schedule_loop())
     try:
         yield
     finally:
         task.cancel()
+        sched_task.cancel()
         try:
             await task
+        except Exception:
+            pass
+        try:
+            await sched_task
         except Exception:
             pass
         global _DB
@@ -780,6 +787,68 @@ LIGHT_CHANNELS = ("ch1", "ch3")
 LIGHT_CMD_PUBSUB_CHANNEL = "light:cmd:set"
 _REDIS: Optional[redis.Redis] = None
 
+# ---------------------------------------------------------------------------
+# Light schedule
+# ---------------------------------------------------------------------------
+
+MSK = timezone(timedelta(hours=3))
+SCHEDULE_KV_KEY = "light_schedule"
+
+DEFAULT_SCHEDULE: dict = {
+    "enabled": True,
+    "entries": [
+        {"id": "on-ch1",  "label": "Споты вкл",    "channel": "ch1", "state": True,  "hour": 19, "minute": 0,  "enabled": True},
+        {"id": "on-ch3",  "label": "Гирлянда вкл", "channel": "ch3", "state": True,  "hour": 19, "minute": 15, "enabled": True},
+        {"id": "off-ch1", "label": "Споты выкл",   "channel": "ch1", "state": False, "hour": 0,  "minute": 0,  "enabled": True},
+        {"id": "off-ch3", "label": "Гирлянда выкл","channel": "ch3", "state": False, "hour": 0,  "minute": 15, "enabled": True},
+    ],
+}
+
+
+def _load_schedule() -> dict:
+    raw = kv_get(SCHEDULE_KV_KEY)
+    if raw:
+        try:
+            return json.loads(raw)
+        except Exception:
+            pass
+    return DEFAULT_SCHEDULE
+
+
+async def _schedule_loop() -> None:
+    while True:
+        try:
+            await asyncio.sleep(30)
+            sched = _load_schedule()
+            if not sched.get("enabled"):
+                continue
+            now = datetime.now(tz=MSK)
+            hh, mm, day_key = now.hour, now.minute, now.strftime("%Y-%m-%d")
+            for entry in sched.get("entries", []):
+                if not entry.get("enabled"):
+                    continue
+                if entry.get("hour") != hh or entry.get("minute") != mm:
+                    continue
+                fired_key = f"sched_fired:{day_key}:{hh:02d}:{mm:02d}:{entry['id']}"
+                if kv_get(fired_key) is not None:
+                    continue
+                ch = entry.get("channel")
+                state = entry.get("state")
+                if ch not in LIGHT_CHANNELS or not isinstance(state, bool):
+                    continue
+                try:
+                    rdb = _redis()
+                    text = "true" if state else "false"
+                    rdb.set(f"light:{ch}:cmd", text)
+                    rdb.publish(LIGHT_CMD_PUBSUB_CHANNEL, f"{ch}:{text}")
+                    kv_put(fired_key, "1", ttl=120)
+                except Exception:
+                    pass
+        except asyncio.CancelledError:
+            break
+        except Exception:
+            await asyncio.sleep(30)
+
 
 def _redis() -> redis.Redis:
     global _REDIS
@@ -885,6 +954,27 @@ async def fallthrough_streaming_proxy(path: str, request: Request):
         headers=resp_headers,
         media_type=r.headers.get("content-type"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Light schedule endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/api/light/schedule", include_in_schema=False)
+async def api_light_schedule_get():
+    return json_response(_load_schedule())
+
+
+@app.put("/api/light/schedule", include_in_schema=False)
+async def api_light_schedule_put(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return json_response({"ok": False, "error": "bad_json"}, status=400)
+    if not isinstance(body, dict) or "entries" not in body:
+        return json_response({"ok": False, "error": "invalid_schema"}, status=400)
+    kv_put(SCHEDULE_KV_KEY, json.dumps(body))
+    return json_response({"ok": True})
 
 
 # ---------------------------------------------------------------------------

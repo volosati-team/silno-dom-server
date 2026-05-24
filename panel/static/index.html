@@ -36,6 +36,11 @@
   <div class="ztab" data-zone="hall">Холл</div>
   <div class="ztab" data-zone="workshop">Мастерская</div>
   <div class="ztab" data-zone="basement">Подвал</div>
+  <button id="sched-btn" onclick="openSchedule()" title="Таймер">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+  </button>
 </div>
 
 <!-- ZONE CONTENT clip -->
@@ -327,6 +332,24 @@
       <div id="sc-qr-wait-txt">Ожидаю авторизацию...</div>
     </div>
   </div>
+</div>
+
+<!-- SCHEDULE MODAL -->
+<div id="sched-overlay" onclick="closeSchedule()"></div>
+<div id="sched-modal">
+  <div id="sched-modal-hdr">
+    <span>Таймер света</span>
+    <button onclick="closeSchedule()">✕</button>
+  </div>
+  <div id="sched-global-row">
+    <span>Таймер включён</span>
+    <label class="tswitch">
+      <input type="checkbox" id="sched-enabled">
+      <span class="ttrack"><span class="tthumb"></span></span>
+    </label>
+  </div>
+  <div id="sched-entries"></div>
+  <button id="sched-save" onclick="saveSchedule()">Сохранить</button>
 </div>
 
 <!-- MENU -->

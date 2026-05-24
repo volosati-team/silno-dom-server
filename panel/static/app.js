@@ -2306,3 +2306,77 @@ document.getElementById('guest-paste-input').addEventListener('keydown', e => { 
     });
   });
 })();
+
+// ─── LIGHT SCHEDULE ─────────────────────────────────────────────────────────
+var _schedCache = null;
+
+function openSchedule() {
+  fetch('/api/light/schedule')
+    .then(function(r) { return r.json(); })
+    .then(function(sched) {
+      _schedCache = sched;
+      var enEl = document.getElementById('sched-enabled');
+      if (enEl) enEl.checked = !!sched.enabled;
+      var container = document.getElementById('sched-entries');
+      if (!container) return;
+      container.innerHTML = '';
+      (sched.entries || []).forEach(function(e) {
+        var hh = String(e.hour).padStart(2, '0');
+        var mm = String(e.minute).padStart(2, '0');
+        var row = document.createElement('div');
+        row.className = 'sched-entry';
+        row.dataset.id = e.id;
+        row.innerHTML =
+          '<label class="tswitch" onclick="event.stopPropagation()">' +
+            '<input type="checkbox" class="sched-entry-en tchk"' + (e.enabled ? ' checked' : '') + '>' +
+            '<span class="ttrack"><span class="tthumb"></span></span>' +
+          '</label>' +
+          '<span class="sched-entry-lbl">' + (e.label || e.id) + '</span>' +
+          '<input class="sched-time" type="time" value="' + hh + ':' + mm + '">';
+        container.appendChild(row);
+      });
+      document.getElementById('sched-modal').classList.add('show');
+      document.getElementById('sched-overlay').classList.add('show');
+    })
+    .catch(function(err) { console.error('schedule load', err); });
+}
+
+function closeSchedule() {
+  var modal = document.getElementById('sched-modal');
+  var ov = document.getElementById('sched-overlay');
+  if (modal) modal.classList.remove('show');
+  if (ov) ov.classList.remove('show');
+}
+
+function saveSchedule() {
+  if (!_schedCache) return;
+  var entries = [];
+  document.querySelectorAll('#sched-entries .sched-entry').forEach(function(row) {
+    var id = row.dataset.id;
+    var orig = (_schedCache.entries || []).find(function(e) { return e.id === id; });
+    if (!orig) return;
+    var timeEl = row.querySelector('.sched-time');
+    var parts = (timeEl ? timeEl.value : '00:00').split(':');
+    var enEl = row.querySelector('.sched-entry-en');
+    entries.push(Object.assign({}, orig, {
+      hour: parseInt(parts[0], 10) || 0,
+      minute: parseInt(parts[1], 10) || 0,
+      enabled: enEl ? enEl.checked : orig.enabled,
+    }));
+  });
+  var globalEnEl = document.getElementById('sched-enabled');
+  var payload = {
+    enabled: globalEnEl ? globalEnEl.checked : true,
+    entries: entries,
+  };
+  fetch('/api/light/schedule', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+    .then(function() {
+      _schedCache = payload;
+      closeSchedule();
+    })
+    .catch(function(err) { console.error('schedule save', err); });
+}

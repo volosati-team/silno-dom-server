@@ -59,6 +59,19 @@ API (all under `/api/*`, CORS `*`):
 
 - **Switch to HTTPS before docker migration.** Currently the panel serves over plain HTTP on `:8081`. Before containerising this service, terminate TLS in front of it (e.g. Caddy or nginx in the same compose stack) so all media-panel traffic is encrypted at the LAN edge. Required for token-auth, SC OAuth, and future Yandex/Spotify integrations that may refuse cleartext callbacks.
 
+- **BT disconnect button (Android APK).** Tablet Bluetooth (Xiaomi kiosk, Android 8.1) cannot be controlled from Bromite (Web Bluetooth API disabled). Plan: minimal background APK with NanoHTTPD server on `localhost:8765`; panel JS calls `GET /bt-pause` → APK disconnects connected BT devices → after 10s reconnects. Requires `BLUETOOTH_ADMIN` permission. Alternative if Termux is installed: `termux-bluetooth` API. Button location: hamburger menu, zone ГАМБАР.
+
+- **Screen brightness + volume/playback controls.** Tablet (Android 8.1 kiosk) brightness and system volume cannot be set from Bromite. Same path as BT — requires APK or ADB. Panel JS can expose sliders/buttons but the actual OS call needs a local agent (Termux or custom APK). Design: sliders appear in the hamburger menu or in the controls bar. Playback control (play/pause/next) already works via panel JS; volume/brightness need Android layer.
+
+- **Solar schedule.** Extend the light timer with sunrise/sunset data for Derbent (lat 42.05, lon 48.29). Use `suntime` or `astral` Python package to compute today's dawn/dusk times; substitute them as virtual schedule entries alongside fixed-time entries. UI: "по закату" / "по рассвету" option per entry instead of fixed time. Illuminance sensor (when hardware arrives) can further refine the on/off threshold.
+
+- **Light timer (schedule).** Clock button in hamburger menu opens a schedule panel. Default schedule stored in SQLite KV, editable from UI:
+  - 19:00 — ch1 (споты) ON
+  - 19:15 — ch3 (гирлянда) ON
+  - 00:00 — ch1 OFF
+  - 00:15 — ch3 OFF
+  Backend: APScheduler background task in panel app; reads schedule from `kv` table (`key=light_schedule`); fires internal `/api/light/set` calls. Future extension: motion sensor trigger (hardware not yet available). When motion fires during a scheduled off-window → defer turn-off by 10 min; each new trigger resets the timer.
+
 ## Status (2026-05-21 22:00 MSK)
 
 Layered architecture, both layers are mandatory and independent.
