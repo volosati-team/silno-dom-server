@@ -747,9 +747,26 @@ function ytShowError() {
   }, 1000);
 }
 function ytHideError() {
+  ytCancelWatchdog();
   if (ytErrorCountdownTimer) { clearInterval(ytErrorCountdownTimer); ytErrorCountdownTimer = null; }
   var overlay = document.getElementById('yt-error-overlay');
   if (overlay) overlay.classList.remove('show');
+}
+
+// Watchdog: if YT iframe doesn't reach playerState=1 within 12s, treat as unavailable
+var ytWatchdogTimer = null;
+function ytStartWatchdog() {
+  ytCancelWatchdog();
+  ytWatchdogTimer = setTimeout(function() {
+    ytWatchdogTimer = null;
+    if (!ytPlaying) {
+      console.warn('YT watchdog: no playback after 12s, showing error overlay');
+      ytShowError();
+    }
+  }, 12000);
+}
+function ytCancelWatchdog() {
+  if (ytWatchdogTimer) { clearTimeout(ytWatchdogTimer); ytWatchdogTimer = null; }
 }
 
 function ytCmd(func, args) {
@@ -1000,7 +1017,8 @@ window.addEventListener('message', e => {
     if (d.event === 'onStateChange') {
       ytPlaying = d.info === 1;
       setBarPlayPauseIcon(ytPlaying);
-      if (d.info === 0) ytAutoNext();  // ended → next in panel playlist
+      if (d.info === 1) ytCancelWatchdog();  // playing — cancel watchdog
+      if (d.info === 0) ytAutoNext();         // ended → next in panel playlist
     }
     if (d.event === 'onError') {
       // Embed-restricted (101/150), removed/private (100), or other — show overlay + skip
@@ -1017,7 +1035,8 @@ window.addEventListener('message', e => {
           ytPlaying = playing;
           setBarPlayPauseIcon(ytPlaying);
         }
-        if (d.info.playerState === 0) ytAutoNext();  // ended via infoDelivery
+        if (d.info.playerState === 1) ytCancelWatchdog();  // playing
+        if (d.info.playerState === 0) ytAutoNext();         // ended via infoDelivery
       }
       // YT sends title in videoData sub-object
       if (d.info.videoData) ytApplyVideoData(d.info.videoData);
@@ -1750,13 +1769,13 @@ function loadSavedItemIframe(item) {
     } else {
       art.src = ''; art.classList.add('yt-icon'); art.style.background = '';
     }
-    // For single-video URLs append &list=RD<vid> to spawn a YouTube Mix
-    // playlist (auto-DJ): autoplay-next picks similar music tracks. Mix
-    // lives as long as the seed video isn't deleted/private.
-    // Explicit playlist URLs (m3) keep their own list, no Mix wrapping.
+    // No YouTube Mix (?list=RD{vid}) — when track ends, panel handles next
+    // via ytAutoNext(). Mix caused silent failures: YouTube would auto-load
+    // an unavailable video inside the iframe without firing onError.
     if (m3) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/videoseries?list=' + m3[1] + '&autoplay=1&enablejsapi=1';
-    else if (m1) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m1[1] + '?list=RD' + m1[1] + '&autoplay=1&enablejsapi=1';
-    else if (m2) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m2[1] + '?list=RD' + m2[1] + '&autoplay=1&enablejsapi=1';
+    else if (m1) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m1[1] + '?autoplay=1&enablejsapi=1';
+    else if (m2) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m2[1] + '?autoplay=1&enablejsapi=1';
+    ytStartWatchdog();
   } else if (item.service === 'soundcloud') {
     setMediaTab(1);
     scLoadInWidget(item.url);
@@ -2158,7 +2177,7 @@ function restorePlaybackState() {
     var vid = m1 ? m1[1] : (m2 ? m2[1] : null);
     var src = '';
     if (m3) src = 'https://www.youtube-nocookie.com/embed/videoseries?list=' + m3[1] + '&autoplay=1&enablejsapi=1';
-    else if (vid) src = 'https://www.youtube-nocookie.com/embed/' + vid + '?list=RD' + vid + '&autoplay=1&enablejsapi=1' + (startSec > 5 ? '&start=' + startSec : '');
+    else if (vid) src = 'https://www.youtube-nocookie.com/embed/' + vid + '?autoplay=1&enablejsapi=1' + (startSec > 5 ? '&start=' + startSec : '');
     if (src) document.getElementById('yt-frame').src = src;
   } else if (item.service === 'soundcloud') {
     setMediaTab(1);
