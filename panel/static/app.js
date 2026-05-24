@@ -1862,6 +1862,12 @@ async function searchSubmit() {
       saveBtn.addEventListener('click', function (ev) {
         ev.stopPropagation();
         addToSaved(it.url, title);
+        // Close search panel after adding
+        var row = document.getElementById('saved-search-row');
+        if (row.classList.contains('show')) {
+          row.classList.remove('show');
+          document.getElementById('search-results').innerHTML = '';
+        }
       });
       results.appendChild(card);
       cards.push({ vid: it.id, el: card });
