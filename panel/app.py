@@ -26,6 +26,13 @@ from typing import Any, Optional
 
 import httpx
 import redis
+
+try:
+    from astral import LocationInfo as _AstralLocation
+    from astral.sun import sun as _astral_sun
+    _ASTRAL_OK = True
+except ImportError:
+    _ASTRAL_OK = False
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (
@@ -794,13 +801,36 @@ _REDIS: Optional[redis.Redis] = None
 MSK = timezone(timedelta(hours=3))
 SCHEDULE_KV_KEY = "light_schedule"
 
+_DERBENT = None
+if _ASTRAL_OK:
+    try:
+        _DERBENT = _AstralLocation("Derbent", "Russia", "Europe/Moscow", 42.0567, 48.292)
+    except Exception:
+        pass
+
+
+def _sun_time(kind: str) -> tuple:
+    """Return (hour, minute) in MSK for today's sunrise or sunset. Falls back to fixed defaults."""
+    fallback = (19, 0) if kind == "sunset" else (5, 30)
+    if _DERBENT is None:
+        return fallback
+    try:
+        s = _astral_sun(_DERBENT.observer, date=datetime.now(tz=MSK).date(), tzinfo=MSK)
+        dt = s.get(kind)
+        if dt is None:
+            return fallback
+        return (dt.hour, dt.minute)
+    except Exception:
+        return fallback
+
+
 DEFAULT_SCHEDULE: dict = {
     "enabled": True,
     "entries": [
-        {"id": "on-ch1",  "label": "Споты вкл",    "channel": "ch1", "state": True,  "hour": 19, "minute": 0,  "enabled": True},
-        {"id": "on-ch3",  "label": "Гирлянда вкл", "channel": "ch3", "state": True,  "hour": 19, "minute": 15, "enabled": True},
-        {"id": "off-ch1", "label": "Споты выкл",   "channel": "ch1", "state": False, "hour": 0,  "minute": 0,  "enabled": True},
-        {"id": "off-ch3", "label": "Гирлянда выкл","channel": "ch3", "state": False, "hour": 0,  "minute": 15, "enabled": True},
+        {"id": "on-ch1",  "label": "Споты вкл",    "channel": "ch1", "state": True,  "mode": "sunset",       "enabled": True},
+        {"id": "on-ch3",  "label": "Гирлянда вкл", "channel": "ch3", "state": True,  "mode": "sunset",       "enabled": True},
+        {"id": "off-ch1", "label": "Споты выкл",   "channel": "ch1", "state": False, "hour": 4, "minute": 0,  "enabled": True},
+        {"id": "off-ch3", "label": "Гирлянда выкл","channel": "ch3", "state": False, "hour": 4, "minute": 0,  "enabled": True},
     ],
 }
 
@@ -827,7 +857,13 @@ async def _schedule_loop() -> None:
             for entry in sched.get("entries", []):
                 if not entry.get("enabled"):
                     continue
-                if entry.get("hour") != hh or entry.get("minute") != mm:
+                mode = entry.get("mode")
+                if mode:
+                    target_hh, target_mm = _sun_time(mode)
+                else:
+                    target_hh = entry.get("hour", -1)
+                    target_mm = entry.get("minute", -1)
+                if target_hh != hh or target_mm != mm:
                     continue
                 fired_key = f"sched_fired:{day_key}:{hh:02d}:{mm:02d}:{entry['id']}"
                 if kv_get(fired_key) is not None:

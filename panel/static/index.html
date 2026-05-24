@@ -36,9 +36,14 @@
   <div class="ztab" data-zone="hall">Холл</div>
   <div class="ztab" data-zone="workshop">Мастерская</div>
   <div class="ztab" data-zone="basement">Подвал</div>
-  <button id="sched-btn" onclick="openSchedule()" title="Таймер">
+  <button id="sched-btn" onclick="openSchedule()" title="Расписание">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+  </button>
+  <button id="sleep-btn" onclick="openSleepTimer()" title="Таймер выключения">
+    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
     </svg>
   </button>
 </div>
@@ -332,6 +337,24 @@
       <div id="sc-qr-wait-txt">Ожидаю авторизацию...</div>
     </div>
   </div>
+</div>
+
+<!-- SLEEP TIMER MODAL -->
+<div id="sleep-overlay" onclick="closeSleepTimer()"></div>
+<div id="sleep-modal">
+  <div id="sleep-modal-hdr">
+    <span>Таймер выключения</span>
+    <button onclick="closeSleepTimer()">✕</button>
+  </div>
+  <div id="sleep-presets">
+    <button class="sleep-preset" onclick="startSleep(15)">15 мин</button>
+    <button class="sleep-preset" onclick="startSleep(30)">30 мин</button>
+    <button class="sleep-preset" onclick="startSleep(45)">45 мин</button>
+    <button class="sleep-preset" onclick="startSleep(60)">1 час</button>
+    <button class="sleep-preset" onclick="startSleep(90)">1.5 ч</button>
+    <button class="sleep-preset" onclick="startSleep(120)">2 часа</button>
+  </div>
+  <button id="sleep-cancel" onclick="cancelSleep()">Отмена</button>
 </div>
 
 <!-- SCHEDULE MODAL -->

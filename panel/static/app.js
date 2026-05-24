@@ -2326,13 +2326,17 @@ function openSchedule() {
         var row = document.createElement('div');
         row.className = 'sched-entry';
         row.dataset.id = e.id;
+        var modeLabels = { sunset: 'по закату', sunrise: 'по рассвету' };
+        var timeWidget = e.mode
+          ? '<span class="sched-mode-lbl">' + (modeLabels[e.mode] || e.mode) + '</span>'
+          : '<input class="sched-time" type="time" value="' + hh + ':' + mm + '">';
         row.innerHTML =
           '<label class="tswitch" onclick="event.stopPropagation()">' +
             '<input type="checkbox" class="sched-entry-en tchk"' + (e.enabled ? ' checked' : '') + '>' +
             '<span class="ttrack"><span class="tthumb"></span></span>' +
           '</label>' +
           '<span class="sched-entry-lbl">' + (e.label || e.id) + '</span>' +
-          '<input class="sched-time" type="time" value="' + hh + ':' + mm + '">';
+          timeWidget;
         container.appendChild(row);
       });
       document.getElementById('sched-modal').classList.add('show');
@@ -2356,13 +2360,14 @@ function saveSchedule() {
     var orig = (_schedCache.entries || []).find(function(e) { return e.id === id; });
     if (!orig) return;
     var timeEl = row.querySelector('.sched-time');
-    var parts = (timeEl ? timeEl.value : '00:00').split(':');
     var enEl = row.querySelector('.sched-entry-en');
-    entries.push(Object.assign({}, orig, {
-      hour: parseInt(parts[0], 10) || 0,
-      minute: parseInt(parts[1], 10) || 0,
-      enabled: enEl ? enEl.checked : orig.enabled,
-    }));
+    var update = { enabled: enEl ? enEl.checked : orig.enabled };
+    if (!orig.mode && timeEl) {
+      var parts = timeEl.value.split(':');
+      update.hour = parseInt(parts[0], 10) || 0;
+      update.minute = parseInt(parts[1], 10) || 0;
+    }
+    entries.push(Object.assign({}, orig, update));
   });
   var globalEnEl = document.getElementById('sched-enabled');
   var payload = {
@@ -2379,4 +2384,72 @@ function saveSchedule() {
       closeSchedule();
     })
     .catch(function(err) { console.error('schedule save', err); });
+}
+
+// ─── SLEEP TIMER ─────────────────────────────────────────────────────────────
+var _sleepTimer = null;
+var _sleepEnd = 0;
+
+function openSleepTimer() {
+  var cancelBtn = document.getElementById('sleep-cancel');
+  if (cancelBtn) {
+    if (_sleepTimer) cancelBtn.classList.add('visible');
+    else cancelBtn.classList.remove('visible');
+  }
+  document.getElementById('sleep-modal').classList.add('show');
+  document.getElementById('sleep-overlay').classList.add('show');
+}
+
+function closeSleepTimer() {
+  document.getElementById('sleep-modal').classList.remove('show');
+  document.getElementById('sleep-overlay').classList.remove('show');
+}
+
+function startSleep(minutes) {
+  if (_sleepTimer) clearInterval(_sleepTimer);
+  _sleepEnd = Date.now() + minutes * 60 * 1000;
+  _sleepTimer = setInterval(_sleepUpdate, 1000);
+  _updateSleepBtn();
+  closeSleepTimer();
+}
+
+function cancelSleep() {
+  if (_sleepTimer) clearInterval(_sleepTimer);
+  _sleepTimer = null;
+  _sleepEnd = 0;
+  _updateSleepBtn();
+  closeSleepTimer();
+}
+
+function _sleepUpdate() {
+  var remaining = Math.max(0, _sleepEnd - Date.now());
+  _updateSleepBtn();
+  if (remaining <= 0) {
+    clearInterval(_sleepTimer);
+    _sleepTimer = null;
+    _sleepEnd = 0;
+    fetch('/api/light/set', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ch1: false, ch3: false }),
+    }).catch(function() {});
+  }
+}
+
+var _MOON_SVG = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+
+function _updateSleepBtn() {
+  var btn = document.getElementById('sleep-btn');
+  if (!btn) return;
+  if (_sleepTimer && _sleepEnd > Date.now()) {
+    var rem = Math.ceil((_sleepEnd - Date.now()) / 1000);
+    var m = Math.floor(rem / 60);
+    var s = rem % 60;
+    btn.innerHTML = '<span style="font-variant-numeric:tabular-nums">' +
+      m + ':' + String(s).padStart(2, '0') + '</span>';
+    btn.classList.add('active');
+  } else {
+    btn.innerHTML = _MOON_SVG;
+    btn.classList.remove('active');
+  }
 }

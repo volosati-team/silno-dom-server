@@ -61,6 +61,10 @@ API (all under `/api/*`, CORS `*`):
 
 - **BT disconnect button (Android APK).** Tablet Bluetooth (Xiaomi kiosk, Android 8.1) cannot be controlled from Bromite (Web Bluetooth API disabled). Plan: minimal background APK with NanoHTTPD server on `localhost:8765`; panel JS calls `GET /bt-pause` → APK disconnects connected BT devices → after 10s reconnects. Requires `BLUETOOTH_ADMIN` permission. Alternative if Termux is installed: `termux-bluetooth` API. Button location: hamburger menu, zone ГАМБАР.
 
+- **WiFi точка у ворот (физика, завтра).** Установить AP в зоне ворот/входной двери для покрытия ESP32-CAM и прочих устройств у входа.
+
+- **ESP32-CAM doorbell** → `projects/silno-dom-security/` (основной проект). ESP32-CAM на входной двери. Звонит НЕ на телефон, НЕ в Telegram. Только на планшет (панель). При нажатии кнопки: музыка стопается, играет звонок, всплывает overlay с RTSP-трансляцией камеры + кнопка «Открыть дверь». Протокол: ESP32 → MQTT `home/door/bell` → сервер → WebSocket/SSE → панель JS overlay. RTSP-поток подключается к lokalnому компу (voloNuk) параллельно для распознавания лиц: если свой → авто-открытие двери без звонка. Завтра ставим железо + WiFi точку у ворот.
+
 - **Screen brightness + volume/playback controls.** Tablet (Android 8.1 kiosk) brightness and system volume cannot be set from Bromite. Same path as BT — requires APK or ADB. Panel JS can expose sliders/buttons but the actual OS call needs a local agent (Termux or custom APK). Design: sliders appear in the hamburger menu or in the controls bar. Playback control (play/pause/next) already works via panel JS; volume/brightness need Android layer.
 
 - **Solar schedule.** Extend the light timer with sunrise/sunset data for Derbent (lat 42.05, lon 48.29). Use `suntime` or `astral` Python package to compute today's dawn/dusk times; substitute them as virtual schedule entries alongside fixed-time entries. UI: "по закату" / "по рассвету" option per entry instead of fixed time. Illuminance sensor (when hardware arrives) can further refine the on/off threshold.
