@@ -695,6 +695,16 @@ html, body {
   transition: width 0.5s linear; pointer-events: none; border-radius: 2px;
 }
 #sc-prog:hover { height: 5px; transition: height 0.1s; }
+#sc-prog.scrubbing { height: 5px; }
+#sc-prog-thumb {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--yellow);
+  pointer-events: none;
+  opacity: 0; transition: opacity 0.1s;
+  left: 0;
+}
+#sc-prog.scrubbing #sc-prog-thumb { opacity: 1; }
 #sc-time-cur, #sc-time-dur {
   font-size: 20px; color: var(--muted); flex-shrink: 0;
   font-variant-numeric: tabular-nums; letter-spacing: 0.03em; min-width: 52px; text-align: center;
