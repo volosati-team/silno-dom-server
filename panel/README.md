@@ -76,7 +76,7 @@ API (all under `/api/*`, CORS `*`):
   - 00:15 — ch3 OFF
   Backend: APScheduler background task in panel app; reads schedule from `kv` table (`key=light_schedule`); fires internal `/api/light/set` calls. Future extension: motion sensor trigger (hardware not yet available). When motion fires during a scheduled off-window → defer turn-off by 10 min; each new trigger resets the timer.
 
-- **Remote media control (pause / volume).** Во дворе проходят переговоры/созвоны — нужна возможность для агентов и людей управлять панелью удалённо без физического доступа к планшету: поставить на паузу, сделать тихо, убрать совсем. План: единый endpoint `POST /api/media/cmd` с телом `{"cmd": "pause"|"resume"|"volume", "level": 0-100}` → пишет KV-флаг в DragonFly (`media:cmd`) → панель JS читает через SSE или short-poll каждые 2с → вызывает `scPlayPause()` / `scSetVolume(N)`. Агент (queue_runner task type `media_cmd`) или любой HTTP-клиент на LAN/bridge дёргает эндпоинт.
+- **Remote media control (pause / volume).** Во дворе проходят переговоры/созвоны — нужна возможность для агентов и людей управлять панелью удалённо без физического доступа к планшету: поставить на паузу, сделать тихо, убрать совсем. План: `POST /api/media/cmd` с телом `{"cmd": "pause"|"resume"|"volume", "level": 0-100}` → пишет KV-флаг в DragonFly → панель JS читает через SSE или short-poll каждые 2с → вызывает `scPlayPause()` / `scSetVolume(N)`. После POST — обязателен `GET /api/media/state` для подтверждения применения (ACK-паттерн, не fire-and-forget): возвращает `{"playing": bool, "volume": 0-100}` из актуального состояния панели. Агент (queue_runner task type `media_cmd`) или любой HTTP-клиент на LAN/bridge дёргает эндпоинт.
 
 ## Status (2026-05-21 22:00 MSK)
 
