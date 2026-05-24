@@ -726,6 +726,32 @@ function ytAutoNext() {
   }, 600);
 }
 
+var ytErrorCountdownTimer = null;
+function ytShowError() {
+  if (ytErrorCountdownTimer) return;  // already showing
+  var overlay = document.getElementById('yt-error-overlay');
+  var cdEl = document.getElementById('yt-error-countdown');
+  if (!overlay) { scNext(); return; }
+  overlay.classList.add('show');
+  var sec = 5;
+  if (cdEl) cdEl.textContent = sec;
+  ytErrorCountdownTimer = setInterval(function() {
+    sec--;
+    if (cdEl) cdEl.textContent = sec;
+    if (sec <= 0) {
+      clearInterval(ytErrorCountdownTimer);
+      ytErrorCountdownTimer = null;
+      overlay.classList.remove('show');
+      scNext();
+    }
+  }, 1000);
+}
+function ytHideError() {
+  if (ytErrorCountdownTimer) { clearInterval(ytErrorCountdownTimer); ytErrorCountdownTimer = null; }
+  var overlay = document.getElementById('yt-error-overlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
 function ytCmd(func, args) {
   try {
     document.getElementById('yt-frame').contentWindow.postMessage(
@@ -977,9 +1003,9 @@ window.addEventListener('message', e => {
       if (d.info === 0) ytAutoNext();  // ended → next in panel playlist
     }
     if (d.event === 'onError') {
-      // Embed-restricted (101/150), removed/private (100), or other — skip to next
-      console.warn('YT embed error, code=' + d.info + ', skipping to next');
-      ytAutoNext();
+      // Embed-restricted (101/150), removed/private (100), or other — show overlay + skip
+      console.warn('YT embed error, code=' + d.info + ', showing error overlay');
+      ytShowError();
     }
     if (d.event === 'infoDelivery' && d.info) {
       // YT nocookie embed pipes playerState through infoDelivery.info
@@ -1707,6 +1733,7 @@ function loadSavedItem(item) {
 }
 
 function loadSavedItemIframe(item) {
+  ytHideError();
   if (item.service === 'youtube') {
     setMediaTab(0);
     // Immediately populate bar from saved item data

@@ -203,10 +203,16 @@
       <button id="saved-tab" onclick="toggleSavedPanel()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
       <div id="media-track-wrap">
       <div id="media-track">
-        <div class="mslide">
+        <div class="mslide" id="yt-slide">
           <iframe id="yt-frame" src="about:blank"
             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
             allowfullscreen></iframe>
+          <div id="yt-error-overlay">
+            <div id="yt-error-banner">
+              <div id="yt-error-label">НЕДОСТУПНО</div>
+              <div id="yt-error-sub">переключаю через <span id="yt-error-countdown">5</span>с</div>
+            </div>
+          </div>
         </div>
         <div class="mslide" id="sc-slide">
           <div id="sc-topbar">

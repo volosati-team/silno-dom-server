@@ -639,6 +639,30 @@ html, body {
 }
 #sc-go-btn:active { opacity: 0.7; }
 
+/* ─── YT ERROR OVERLAY ───────────────────────────────────────────────────── */
+#yt-slide { position: relative; }
+#yt-error-overlay {
+  display: none; position: absolute; inset: 0;
+  background: rgba(0,0,0,0.82);
+  align-items: center; justify-content: center;
+  z-index: 50;
+}
+#yt-error-overlay.show { display: flex; }
+#yt-error-banner {
+  background: #c00; color: #fff;
+  padding: 18px 36px; border-radius: 6px;
+  text-align: center;
+  transform: rotate(-4deg);
+  box-shadow: 0 4px 32px rgba(0,0,0,0.6);
+}
+#yt-error-label {
+  font-size: 32px; font-weight: 700; letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+#yt-error-sub {
+  font-size: 16px; margin-top: 6px; opacity: 0.9; letter-spacing: 0.06em;
+}
+
 /* ─── SC PERSISTENT PLAYER BAR ──────────────────────────────────────────── */
 #sc-controls {
   position: fixed; bottom: 0; left: 0; right: 0;
