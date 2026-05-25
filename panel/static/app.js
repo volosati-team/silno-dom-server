@@ -2458,15 +2458,21 @@ function _updateSleepBtn() {
 function btToggle() {
   var btn = document.getElementById('bt-btn');
   if (btn) btn.classList.add('active');
-  fetch('/api/bt/toggle', { method: 'POST' })
+  // Call APK directly on same device (browser + APK share localhost on tablet)
+  fetch('http://localhost:8765/bt-toggle')
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (btn) setTimeout(function () { btn.classList.remove('active'); }, 800);
-      if (!d.ok) console.warn('bt_toggle:', d.error, d.detail);
+      if (d.ok) {
+        console.log('bt_toggle: now', d.state);
+      } else {
+        console.warn('bt_toggle error:', d.error);
+        if (btn) btn.classList.remove('active');
+      }
     })
     .catch(function (e) {
       if (btn) btn.classList.remove('active');
-      console.warn('bt_toggle fetch error:', e);
+      console.warn('bt_toggle: agent unreachable', e);
     });
 }
 
