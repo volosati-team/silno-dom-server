@@ -985,14 +985,6 @@ html, body {
   cursor: pointer;
 }
 
-/* ─── BT BUTTON ─────────────────────────────────────────────────────────── */
-#bt-btn {
-  flex-shrink: 0; padding: 0 10px;
-  background: none; border: none;
-  color: #ffffff55; cursor: pointer; transition: color 0.15s;
-}
-#bt-btn:active, #bt-btn.active { color: var(--yellow); }
-
 /* ─── SLEEP BUTTON ───────────────────────────────────────────────────────── */
 #sleep-btn {
   flex-shrink: 0;
@@ -1142,20 +1134,6 @@ html, body {
 }
 .menu-toggle input[type="checkbox"]:checked { background: #fff50020; }
 .menu-toggle input[type="checkbox"]:checked::after { transform: translateX(16px); background: var(--yellow); }
-
-.menu-slider-row {
-  display: flex; align-items: center; gap: 8px; padding: 5px 20px;
-}
-.menu-slider-lbl { font-size: 11px; color: var(--dim); width: 46px; flex-shrink: 0; }
-.menu-slider-val { font-size: 11px; color: var(--yellow); width: 34px; text-align: right; flex-shrink: 0; }
-input[type="range"].disp-range {
-  flex: 1; -webkit-appearance: none; appearance: none;
-  height: 3px; background: var(--border); border-radius: 2px; outline: none; cursor: pointer;
-}
-input[type="range"].disp-range::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 18px; height: 18px;
-  border-radius: 50%; background: var(--yellow); cursor: pointer;
-}
 
 #logout {
   margin: 8px 20px 0; background: none;
