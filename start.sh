@@ -59,16 +59,21 @@ else
     log "web pid=$!"
 fi
 
-# Media panel — stable (port 8080)
+# Media panel — stable (port 8080) — runs from git worktree locked to main
+STABLE_DIR="$(dirname "$SCRIPT_DIR")/silno-dom-server-stable"
 if pgrep -f "panel.app:app.*--port ${PANEL_PORT:-8080}" > /dev/null; then
     log "panel (stable) already running on ${PANEL_PORT:-8080}, skip"
+elif [ -d "$STABLE_DIR" ]; then
+    log "starting stable panel from worktree $STABLE_DIR (port ${PANEL_PORT:-8080})..."
+    mkdir -p "$STABLE_DIR/logs"
+    (cd "$STABLE_DIR" && nohup python3 -m uvicorn panel.app:app --host 0.0.0.0 --port "${PANEL_PORT:-8080}" >> logs/panel.log 2>&1) &
+    log "panel (stable) pid=$!"
 else
-    log "starting media panel (stable, port ${PANEL_PORT:-8080})..."
-    nohup python3 -m uvicorn panel.app:app --host 0.0.0.0 --port "${PANEL_PORT:-8080}" >> logs/panel.log 2>&1 &
-    log "panel pid=$!"
+    log "WARNING: worktree $STABLE_DIR not found — stable panel NOT started on 8080"
+    log "  Run: git worktree add ../silno-dom-server-stable main"
 fi
 
-# Media panel — dev (port 8082)
+# Media panel — dev (port 8082) — runs from current dev directory
 if pgrep -f "panel.app:app.*--port ${DEV_PANEL_PORT:-8082}" > /dev/null; then
     log "panel (dev) already running on ${DEV_PANEL_PORT:-8082}, skip"
 else
