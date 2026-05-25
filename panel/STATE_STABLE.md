@@ -164,7 +164,16 @@ IP изменится после переезда.
 
 **Открытые задачи (backlog):**
 
-1. Дотестировать Stage B probe после reload — Unheilig/PSY должны
+1. **Автодеплой по несоответствию версий** — реализовать `kv_command_daemon.py` (задокументирован в `ARCHITECTURE_NOTES.md`, не создан): поллер CF KV неймспейса `fed3fe1caf3e464fbb582b03f2e5a4ab`, при команде `update` запускает `update.sh` (git pull --ff-only + рестарт всех сервисов). Это позволяет агенту или GitHub webhook написать в KV → voloNuk сам подтягивает. Альтернативно: сервер сам сравнивает локальный HEAD с GitHub API `refs/heads/main`, при расхождении — git pull + рестарт без внешнего тригера.
+
+2. **Яркость экрана** _(первый приоритет из screensaver-мода)_:
+   - Плавное затемнение до 50% по расписанию (ночной режим)
+   - Залогиненным в меню: 2 горизонтальных слайдера — «Общая яркость» и «Ночное затемнение»
+   - Реализация: API-endpoint `/api/screen/brightness` + KV-хранение настроек + Android-слой (APK/Termux `termux-brightness` или ADB) для применения на планшете
+
+3. **Screensaver-мод** _(следующий шаг после яркости)_: логика перехода панели в режим сна + пробуждение по тачу.
+
+4. Дотестировать Stage B probe после reload — Unheilig/PSY должны
    исчезать из результатов в течение 4 секунд (timeout fallback) или
    быстрее (onError 150). Если probe всё ещё не справляется → Stage C.
 2. **Stage C — playwright headless probe** на voloNuk или на компе
@@ -200,3 +209,112 @@ IP изменится после переезда.
    там `source .env` есть). YOUTUBE_API_KEY в `.env`, AG_BRIDGE_SECRET
    в Windows env vars.
 3. Queue_runner.py для userbot — нужно поднять вручную (см. #406).
+
+---
+
+## Session snapshot — 2026-05-24 evening / 2026-05-25
+
+### Новые коммиты на `feat/saved-panel-search` (после `2db505e`)
+
+- `228c015` — display brightness sliders + night mode (CSS filter + KV + /api/sun/times)
+- `5ee90ec` — start.sh: auto-update loop (git fetch каждые 5 мин, update.sh при drift)
+- `55f6608` — убраны слайдеры яркости из меню (откатано в f92444b)
+- `f92444b` — убраны #header-clock и #sched-btn; слайдеры возвращены; луна на месте
+
+- `4de57a1` — light schedule timer + UI (расписание включения/выключения ch1+ch3)
+- `f61c7f4` — sleep timer button + solar schedule (astral, Derbent 42.05N/48.29E)
+
+### Что добавляет `f61c7f4` (НЕ задеплоено на voloNuk)
+
+**Sleep timer:**
+- Кнопка-луна в zone-tabs (рядом с zone-кнопками)
+- Тап → пресеты 15 / 30 / 45 / 60 / 90 / 120 мин
+- Обратный отсчёт отображается в кнопке
+- По истечении: гасит ch1 + ch3
+
+**Solar schedule:**
+- ON-записи в DEFAULT_SCHEDULE теперь `"mode":"sunset"` через astral `LocationInfo`
+  (Дербент: 42.05°N, 48.29°E)
+- OFF — 04:00 MSK (фиксированное)
+- `_sun_time(kind)`: fallback на 19:00 если astral недоступен
+- `openSchedule()`: для mode-записей показывает бейдж «по закату» вместо time picker
+- `astral>=3.2` добавлен в `requirements.txt`
+
+### Статус деплоя на voloNuk
+
+voloNuk недоступен с 2026-05-24 ~20:00 MSK — Tailscale Funnel таймаутит
+(HTTP 000) на обоих портах (:443 bridge, :8443 panel). Причина: voloNuk
+выключен или Tailscale упал на машине.
+
+На сервере задеплоен коммит `2db505e`, ветка `feat/saved-panel-search`.
+Коммит `f61c7f4` (sleep timer + solar schedule) **не задеплоен** — ждёт
+восстановления доступа.
+
+**Блокеры перед деплоем:**
+1. Поднять voloNuk (если выключен) + убедиться что Tailscale запущен
+2. Запустить `VoloNuk_BridgeWatchdog` в Task Scheduler (или вручную)
+3. После восстановления bridge: `git pull` + `pip install -r panel/requirements.txt` + рестарт uvicorn
+
+### Инфраструктурные issue из этой сессии
+
+- **lisa-core #420** — `whisper_fallback.py` неверная проверка ключа `__quota_error__`
+  вызывала ранний выход; ЗАКРЫТ — фикс в коммите `ade5161`.
+- **lisa-core #421** — `moio-control` CF Worker BACKEND устаревает при ротации
+  cloudflared quick tunnel; ОТКРЫТ — рекомендован переход на named persistent tunnel
+  или Tailscale Funnel напрямую.
+
+### Следующие задачи (после подтверждения что панель живая)
+
+1. **Задеплоить `f61c7f4`** на voloNuk (sleep timer + solar schedule)
+2. **Омнибокс** — объединить `+` и поиск в одно поле:
+   - Одна кнопка в `saved-panel-hdr`
+   - `input.startsWith('http')` → добавить URL; иначе → поиск
+   - QR-поток (телефон → панель) сохраняется
+3. **Слить `feat/saved-panel-search` → main** (нет explicit approve от Андрея)
+
+---
+
+## Session snapshot — 2026-05-25 afternoon MSK
+
+### Новые коммиты (после `f92444b`)
+
+- `cdc34f1` — BT toggle button stub: `#bt-btn` в zone-tabs (вместо часов), `/api/bt/toggle` прокси на localhost:8765
+- `35cf276` — Android APK Gradle проект в `android/bt-agent/`; `btToggle()` теперь зовёт `http://localhost:8765/bt-toggle` напрямую (browser+APK на одном планшете)
+- `162bf57` — AGP 4.1.3 → 7.4.2, Gradle 7.6.1, namespace; ссылка "BT Agent ↓" в `#menu-logged`
+- `58512cc` — `panel/static/bt-agent-debug.apk` (13KB debug build) — скачивается с планшета через `/bt-agent-debug.apk`
+- `603ab49` — **CRITICAL FIX**: заменён `html { filter/transition }` на `#dim-overlay` (position:fixed; pointer-events:none; rgba background). `filter` на `<html>` ломал все `position:fixed` элементы и touch-события на Android Chromium.
+
+### Статус деплоя на voloNuk
+
+HEAD на ветке: `603ab49`. Auto-update loop подтянул изменения в 15:49 MSK (видно из логов планшета). После апдейта был инцидент: `603ab49` ещё не подтянулся — планшет ловил версию со сломанным UI. После деплоя `603ab49` UI восстановлен.
+
+Деплоено (`git pull` + рестарт через auto-update): `603ab49`.
+
+### BT Agent — состояние
+
+- APK исходники: `android/bt-agent/` (Java, Foreground Service, ServerSocket HTTP, нет внешних зависимостей)
+- APK собран Андреем в Android Studio (debug, `com.silnodom.btagent`, v1.0)
+- APK лежит в `panel/static/bt-agent-debug.apk`
+- **Не установлен на планшете** — ожидает деплоя и скачивания через меню
+- После установки: запустить приложение → шторка покажет "BT Agent: Listening on :8765"
+- Тест: нажать `#bt-btn` в панели → `http://localhost:8765/bt-toggle` → BT переключается
+
+### Известные проблемы
+
+- `/api/sun/times` → 502 пока voloNuk крутил старый app.py без этого endpoint. После рестарта с `603ab49` 502 должны прекратиться.
+- MIUI Battery Optimizer может убивать BT Agent APK. Лечится: Настройки → Батарея → Нет ограничений + Автозапуск для com.silnodom.btagent.
+
+### Как восстановиться после рестарта
+
+1. voloNuk должен быть на `feat/saved-panel-search` HEAD `603ab49`
+2. `VoloNuk_StartSilnoServer` Task Scheduler запускает `bash start.sh`
+3. `start.sh` поднимает uvicorn + auto-update loop (PID в `logs/autoupdate.pid`)
+4. `.env` на voloNuk должен иметь `YOUTUBE_API_KEY`, `AG_BRIDGE_SECRET`
+5. После рестарта проверить: `/api/version` → 200, `/api/sun/times` → 200, `/api/state` → 200
+
+### Следующие задачи
+
+1. **Установить BT Agent APK** на планшет → скачать через `http://192.168.31.50/bt-agent-debug.apk` → тест кнопки
+2. **MIUI AutoStart** для BT Agent (чтобы выживал после перезагрузки планшета)
+3. **Омнибокс** (объединить + и поиск в одно поле)
+4. **Слить `feat/saved-panel-search` → main**
