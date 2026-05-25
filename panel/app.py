@@ -1066,8 +1066,11 @@ async def admin_page():
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
+# Passwords stored in .env as PANEL_PASS_<USERNAME> (plain text for now;
+# migrate to hashes when moving to a new server).
 
 _PROD_USERS = ["volosati", "max"]
+_PANEL_ENV = BASE_DIR / ".env"
 
 
 def _is_dev_branch() -> bool:
@@ -1088,6 +1091,20 @@ def _allowed_users() -> list:
     return users
 
 
+def _get_pass(username: str) -> str:
+    return os.environ.get(f"PANEL_PASS_{username.upper()}", "")
+
+
+def _set_pass(username: str, new_pass: str) -> None:
+    key = f"PANEL_PASS_{username.upper()}"
+    os.environ[key] = new_pass  # immediate effect
+    lines = _PANEL_ENV.read_text().splitlines() if _PANEL_ENV.exists() else []
+    prefix = f"{key}="
+    lines = [l for l in lines if not l.startswith(prefix)]
+    lines.append(f"{key}={new_pass}")
+    _PANEL_ENV.write_text("\n".join(lines) + "\n")
+
+
 @app.post("/api/auth/login", include_in_schema=False)
 async def auth_login(request: Request):
     try:
@@ -1102,8 +1119,7 @@ async def auth_login(request: Request):
         if password != "":
             return json_response({"ok": False, "error": "invalid"}, status=401)
         return json_response({"ok": True, "name": "dev"})
-    stored = kv_get(f"panel:pass:{username}") or ""
-    if password != stored:
+    if password != _get_pass(username):
         return json_response({"ok": False, "error": "invalid"}, status=401)
     return json_response({"ok": True, "name": username})
 
@@ -1119,10 +1135,9 @@ async def auth_change_password(request: Request):
     new_pass = body.get("new_password", "")
     if username == "" or username not in _PROD_USERS:
         return json_response({"ok": False, "error": "invalid_user"}, status=400)
-    stored = kv_get(f"panel:pass:{username}") or ""
-    if old_pass != stored:
+    if old_pass != _get_pass(username):
         return json_response({"ok": False, "error": "wrong_password"}, status=401)
-    kv_put(f"panel:pass:{username}", new_pass)
+    _set_pass(username, new_pass)
     return json_response({"ok": True})
 
 
