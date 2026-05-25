@@ -102,6 +102,30 @@ log "done. local panel:  http://localhost:${PANEL_PORT:-8080}"
 log "done. local light: http://localhost:${WEB_PORT:-8081}"
 log "cf url:  grep 'trycloudflare.com' logs/cf.log"
 
+# Auto-update: poll GitHub every 5 min, run update.sh when HEAD drifts from origin
+if [ -f "$SCRIPT_DIR/logs/autoupdate.pid" ]; then
+    _old=$(cat "$SCRIPT_DIR/logs/autoupdate.pid" 2>/dev/null)
+    [ -n "$_old" ] && kill "$_old" 2>/dev/null || true
+fi
+(
+    _branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+    while true; do
+        sleep "${AUTOUPDATE_INTERVAL:-300}"
+        git fetch origin --quiet 2>/dev/null || continue
+        _local=$(git rev-parse HEAD 2>/dev/null)
+        _remote=$(git rev-parse "origin/$_branch" 2>/dev/null)
+        [ -z "$_local" ] || [ -z "$_remote" ] && continue
+        if [ "$_local" != "$_remote" ]; then
+            echo "[$(date '+%H:%M:%S')] HEAD $_local → $_remote, running update.sh" \
+                >> "$SCRIPT_DIR/logs/autoupdate.log"
+            bash "$SCRIPT_DIR/update.sh"
+            exit 0
+        fi
+    done
+) >> logs/autoupdate.log 2>&1 &
+echo "$!" > logs/autoupdate.pid
+log "auto-update pid=$(cat logs/autoupdate.pid) interval=${AUTOUPDATE_INTERVAL:-300}s branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+
 # Write tunnel URL to CF KV so workers pick it up automatically
 if [ -n "${CF_API_TOKEN:-}" ] && [ -n "${CF_ACCOUNT_ID:-}" ]; then
     log "waiting for tunnel URL..."
