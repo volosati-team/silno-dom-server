@@ -19,7 +19,10 @@ git pull --ff-only && echo "[$(date '+%H:%M:%S')] git pull OK" || echo "[$(date 
 
 # Stop services
 pkill -f cloudflared 2>/dev/null; pkill -f home_mqtt_bridge 2>/dev/null
-pkill -f "uvicorn web.app" 2>/dev/null; pkill -x mosquitto 2>/dev/null
+pkill -f "uvicorn web.app" 2>/dev/null
+pkill -f "uvicorn panel.app" 2>/dev/null
+pkill -f "uvicorn streaming.app" 2>/dev/null
+pkill -x mosquitto 2>/dev/null
 sleep 2
 
 # Start all
