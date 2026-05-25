@@ -2492,7 +2492,13 @@ function btToggle() {
 
   function _applyFilter() {
     var v = _effective();
-    document.documentElement.style.filter = v < 100 ? 'brightness(' + v + '%)' : '';
+    var overlay = document.getElementById('dim-overlay');
+    if (!overlay) return;
+    // Convert brightness% to black overlay opacity: 100% bright = opacity 0, 10% bright = opacity ~0.9
+    var opacity = v >= 100 ? 0 : (1 - v / 100) * 0.85;
+    overlay.style.background = opacity > 0
+      ? 'rgba(0,0,0,' + opacity.toFixed(2) + ')'
+      : 'rgba(0,0,0,0)';
   }
 
   function _updateUI() {

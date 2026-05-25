@@ -1143,7 +1143,10 @@ html, body {
 .menu-toggle input[type="checkbox"]:checked { background: #fff50020; }
 .menu-toggle input[type="checkbox"]:checked::after { transform: translateX(16px); background: var(--yellow); }
 
-html { transition: filter 2s linear; }
+#dim-overlay {
+  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: rgba(0,0,0,0); transition: background 2s linear;
+}
 
 .menu-slider-row {
   display: flex; align-items: center; gap: 8px; padding: 5px 20px;
