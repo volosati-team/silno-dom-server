@@ -1204,3 +1204,13 @@ html, body {
   display: none;
 }
 /* Floating "≡" button removed — toggle lives in the user menu now. */
+
+
+/* ── Display brightness overlay (rgba dimmer, no filter on html/body) ── */
+#dim-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 9998;
+  background: rgba(0,0,0,0);
+  transition: background 2s linear;
+}

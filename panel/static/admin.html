@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+<title>Настройки — СИЛЬНО ДОМ</title>
+<meta name="theme-color" content="#0a0a0a">
+<link rel="stylesheet" href="/static/admin.css">
+</head>
+<body>
+<header class="adm-header">
+  <button class="adm-back" onclick="history.back()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    Панель
+  </button>
+  <h1 class="adm-title">Настройки</h1>
+</header>
+
+<main class="adm-main">
+
+  <section class="adm-section">
+    <h2 class="adm-section-title">Яркость экрана</h2>
+
+    <div class="adm-row">
+      <label class="adm-lbl" for="sl-brightness">Общая</label>
+      <input type="range" class="adm-range" id="sl-brightness" min="10" max="100" value="100">
+      <span class="adm-val" id="val-brightness">100%</span>
+    </div>
+
+    <div class="adm-row">
+      <label class="adm-lbl" for="sl-night">Ночью</label>
+      <input type="range" class="adm-range" id="sl-night" min="10" max="100" value="50">
+      <span class="adm-val" id="val-night">50%</span>
+    </div>
+
+    <div class="adm-row adm-row--toggle">
+      <label class="adm-lbl" for="cb-night">Авто ночной режим</label>
+      <label class="adm-switch">
+        <input type="checkbox" id="cb-night" checked>
+        <span class="adm-switch-track"></span>
+      </label>
+    </div>
+
+    <p class="adm-hint">Затемнение через rgba-overlay. По закату — ночная яркость.</p>
+  </section>
+
+  <section class="adm-section">
+    <h2 class="adm-section-title">BT Agent</h2>
+
+    <a class="adm-dl-btn" href="/static/bt-agent-debug.apk" download="bt-agent-debug.apk">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      BT Agent APK
+    </a>
+
+    <div class="adm-row adm-row--status">
+      <span class="adm-lbl">Статус агента</span>
+      <span class="adm-status" id="bt-status">...</span>
+    </div>
+
+    <p class="adm-hint">После установки: открыть приложение → шторка покажет «Listening on :8765». MIUI: Батарея → Нет ограничений + Автозапуск.</p>
+  </section>
+
+</main>
+
+<script src="/static/admin.js"></script>
+</body>
+</html>

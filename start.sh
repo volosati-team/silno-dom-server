@@ -59,13 +59,22 @@ else
     log "web pid=$!"
 fi
 
-# Media panel
-if pgrep -f "uvicorn panel.app:app" > /dev/null; then
-    log "panel already running, skip"
+# Media panel — stable (port 8080)
+if pgrep -f "panel.app:app.*--port ${PANEL_PORT:-8080}" > /dev/null; then
+    log "panel (stable) already running on ${PANEL_PORT:-8080}, skip"
 else
-    log "starting media panel..."
+    log "starting media panel (stable, port ${PANEL_PORT:-8080})..."
     nohup python3 -m uvicorn panel.app:app --host 0.0.0.0 --port "${PANEL_PORT:-8080}" >> logs/panel.log 2>&1 &
     log "panel pid=$!"
+fi
+
+# Media panel — dev (port 8082)
+if pgrep -f "panel.app:app.*--port ${DEV_PANEL_PORT:-8082}" > /dev/null; then
+    log "panel (dev) already running on ${DEV_PANEL_PORT:-8082}, skip"
+else
+    log "starting dev panel (port ${DEV_PANEL_PORT:-8082})..."
+    nohup python3 -m uvicorn panel.app:app --host 0.0.0.0 --port "${DEV_PANEL_PORT:-8082}" >> logs/panel-dev.log 2>&1 &
+    log "dev panel pid=$!"
 fi
 
 # DragonFly <-> MQTT bridge (translates light:chN:cmd keyspace events to MQTT)
@@ -98,8 +107,9 @@ if command -v cloudflared &>/dev/null; then
     fi
 fi
 
-log "done. local panel:  http://localhost:${PANEL_PORT:-8080}"
-log "done. local light: http://localhost:${WEB_PORT:-8081}"
+log "done. stable panel:  http://localhost:${PANEL_PORT:-8080}"
+log "done.    dev panel:  http://localhost:${DEV_PANEL_PORT:-8082}"
+log "done.   light panel: http://localhost:${WEB_PORT:-8081}"
 log "cf url:  grep 'trycloudflare.com' logs/cf.log"
 
 # Auto-update: poll GitHub every 5 min, run update.sh when HEAD drifts from origin

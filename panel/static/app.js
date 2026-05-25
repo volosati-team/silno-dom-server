@@ -2453,3 +2453,26 @@ function _updateSleepBtn() {
     btn.classList.remove('active');
   }
 }
+
+// ── Display brightness overlay ───────────────────────────────────────────────
+(function initDimOverlay() {
+  var overlay = document.getElementById('dim-overlay');
+  if (!overlay) return;
+
+  function applyAlpha(val) {
+    overlay.style.background = 'rgba(0,0,0,' + ((100 - val) / 100).toFixed(2) + ')';
+  }
+
+  function apply(settings, sun) {
+    if (!settings.enabled) { applyAlpha(100); return; }
+    applyAlpha(sun && sun.is_night ? settings.night_dim : settings.brightness);
+  }
+
+  Promise.all([
+    fetch('/api/display/settings').then(function(r){ return r.json(); }).catch(function(){ return null; }),
+    fetch('/api/sun/times').then(function(r){ return r.json(); }).catch(function(){ return null; })
+  ]).then(function(res) {
+    var settings = res[0] || { brightness: 100, night_dim: 50, enabled: true };
+    apply(settings, res[1]);
+  });
+})();
