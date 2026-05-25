@@ -968,14 +968,27 @@ html, body {
 .sched-entry-lbl {
   flex: 1; font-size: 14px; color: var(--text);
 }
-.sched-time {
-  background: var(--bg2); color: var(--text);
-  border: 1px solid var(--dim);
-  border-radius: 6px; padding: 6px 8px;
-  font-size: 15px; font-family: monospace;
-  width: 84px;
-  -webkit-appearance: none;
+/* sched-time: kept for legacy, replaced by .sched-tp */
+.sched-time { display: none; }
+
+.sched-tp {
+  display: flex; align-items: center; gap: 4px;
+  flex-shrink: 0;
 }
+.tp-btn {
+  width: 28px; height: 28px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--yellow);
+  font-size: 18px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.tp-btn:active { background: rgba(255,245,0,0.12); }
+.tp-val {
+  font-size: 16px; font-family: monospace; color: var(--text);
+  min-width: 22px; text-align: center; font-weight: 600;
+}
+.tp-sep { color: var(--muted, #6b7090); font-size: 16px; font-weight: 600; }
 
 #sched-save {
   width: 100%; margin-top: 16px; padding: 13px;
@@ -1204,3 +1217,13 @@ html, body {
   display: none;
 }
 /* Floating "≡" button removed — toggle lives in the user menu now. */
+
+
+/* ── Display brightness overlay (rgba dimmer, no filter on html/body) ── */
+#dim-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 9998;
+  background: rgba(0,0,0,0);
+  transition: background 2s linear;
+}

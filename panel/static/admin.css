@@ -1,0 +1,196 @@
+:root {
+  --yellow: #fff500;
+  --black:  #0a0a0a;
+  --bg:     #09090f;
+  --bg2:    #0d0d1a;
+  --border: #161628;
+  --text:   #dde0f8;
+  --muted:  #6b7090;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  font-size: 16px;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+.adm-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--black);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.adm-back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--yellow);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 6px 10px 6px 4px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+.adm-back:active { opacity: 0.7; }
+
+.adm-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+/* ── Main ── */
+.adm-main {
+  padding: 20px 18px;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ── Section ── */
+.adm-section {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.adm-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ── Row ── */
+.adm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.adm-row--toggle { justify-content: space-between; }
+.adm-row--status { gap: 12px; }
+
+.adm-lbl {
+  font-size: 15px;
+  color: var(--text);
+  flex-shrink: 0;
+  min-width: 72px;
+}
+
+.adm-val {
+  font-size: 14px;
+  color: var(--yellow);
+  min-width: 42px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ── Range slider ── */
+.adm-range {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+.adm-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--yellow);
+  cursor: pointer;
+  box-shadow: 0 0 0 3px rgba(255,245,0,0.15);
+}
+.adm-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--yellow);
+  border: none;
+  cursor: pointer;
+}
+
+/* ── Toggle switch ── */
+.adm-switch { position: relative; display: inline-block; width: 44px; height: 26px; cursor: pointer; }
+.adm-switch input { opacity: 0; width: 0; height: 0; }
+.adm-switch-track {
+  position: absolute; inset: 0;
+  background: var(--border);
+  border-radius: 26px;
+  transition: background 0.2s;
+}
+.adm-switch-track::before {
+  content: '';
+  position: absolute;
+  width: 20px; height: 20px;
+  left: 3px; top: 3px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: transform 0.2s, background 0.2s;
+}
+.adm-switch input:checked + .adm-switch-track { background: rgba(255,245,0,0.25); }
+.adm-switch input:checked + .adm-switch-track::before {
+  transform: translateX(18px);
+  background: var(--yellow);
+}
+
+/* ── Download button ── */
+.adm-dl-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255,245,0,0.1);
+  border: 1px solid rgba(255,245,0,0.3);
+  color: var(--yellow);
+  text-decoration: none;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  transition: background 0.15s;
+  width: fit-content;
+}
+.adm-dl-btn:active { background: rgba(255,245,0,0.2); }
+
+/* ── Status badge ── */
+.adm-status {
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 20px;
+  background: var(--border);
+  color: var(--muted);
+}
+.adm-status.online  { background: rgba(0,200,100,0.15); color: #00cc64; }
+.adm-status.offline { background: rgba(255,60,60,0.12); color: #ff5050; }
+
+/* ── Hint ── */
+.adm-hint {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}

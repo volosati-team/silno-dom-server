@@ -999,6 +999,10 @@ async def fallthrough_streaming_proxy(path: str, request: Request):
 BT_AGENT_URL = "http://127.0.0.1:8765"
 
 
+def _http_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient()
+
+
 @app.post("/api/bt/toggle", include_in_schema=False)
 async def api_bt_toggle():
     try:
@@ -1038,6 +1042,12 @@ async def api_display_settings_put(request: Request):
     merged = {**DISPLAY_DEFAULTS, **{k: body[k] for k in ("brightness", "night_dim", "enabled") if k in body}}
     kv_put(DISPLAY_KV_KEY, json.dumps(merged))
     return json_response({"ok": True})
+
+
+@app.get("/admin", include_in_schema=False)
+async def admin_page():
+    path = STATIC_DIR / "admin.html"
+    return FileResponse(str(path), media_type="text/html")
 
 
 @app.get("/api/sun/times", include_in_schema=False)

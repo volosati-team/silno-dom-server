@@ -359,3 +359,55 @@ cdc34f1 — BT кнопка в zone-tabs
 ```
 
 После `git pull && bash start.sh` всё выше будет задеплоено без brightness. Панель должна работать.
+
+---
+
+## Session snapshot — 2026-05-25 evening MSK
+
+### Новые коммиты (после `6901a18`)
+
+- `16be813` — docs: инцидент-лог (brightness + git auth blocker)
+- `3818579` — fix(update.sh): убивать все uvicorn на обновлении, не только web.app
+- `588e159` — revert(panel/static): откат UI до `fdb0f62` (BT кнопка убрана до готовности APK)
+- `aba3dfa` — feat: `/admin` страница (яркость + APK + ← назад) + `#dim-overlay` + порт 8082
+- `14c7f3b` — fix(schedule): кастомный time picker (−HH+:−MM+) вместо нативного Android виджета; 24ч формат; убран клипинг
+
+**main смержена** с `feat/saved-panel-search` до `588e159` — stable UI живёт в main.
+
+### Статус деплоя на voloNuk
+
+voloNuk при последнем контакте был на `fdb0f62` (manual hard reset). Auto-update остановлен Андреем вручную.
+Коммиты `3818579`..`14c7f3b` **не задеплоены** — ждут следующего `git pull + bash start.sh`.
+
+### Как восстановиться после рестарта
+
+1. voloNuk, под `mqtt-silno` в WSL: `cd ~/silno-dom-server`
+2. `git pull origin feat/saved-panel-search` (credentials уже сохранены)
+3. `pip install -r panel/requirements.txt` (если новые зависимости)
+4. `bash start.sh`
+5. Должны подняться: uvicorn panel.app на 8080 И 8082, web.app на 8081, streaming на 8083, auto-update loop
+6. Проверить: `curl http://localhost:8080/api/version`, `curl http://localhost:8082/admin`
+
+### Блокеры и следующие задачи
+
+1. **Задеплоить `14c7f3b`** на voloNuk: `git pull && bash start.sh` (pkill/restart через auto-update сработает автоматически)
+2. **Установить BT Agent APK** на планшет: `http://192.168.31.50:8082/static/bt-agent-debug.apk` → install → test BT кнопка (после деплоя aba3dfa BT кнопки нет в UI — нужно добавить обратно)
+3. **BT кнопка вернуть в UI** после установки APK: добавить `#bt-btn` в zone-tabs
+4. **Омнибокс** — объединить `+` и поиск в одно поле
+
+### Port map (актуальный)
+
+| Port | Service | Notes |
+|------|---------|-------|
+| 8080 | panel (stable) | main ветка, кастомный start.sh |
+| 8081 | web (emergency light) | не трогать |
+| 8082 | panel (dev) | feat/saved-panel-search, /admin доступен |
+| 8083 | streaming | yt-dlp wrapper |
+
+### Admin страница (`/admin` на 8082)
+
+- Слайдеры яркости → PUT `/api/display/settings` (KV-хранение)
+- Статус BT Agent (ping localhost:8765)
+- APK download
+- `#dim-overlay` инициализируется в `app.js` через `/api/display/settings` + `/api/sun/times`
+- Формула: alpha = (100 - brightness) / 100

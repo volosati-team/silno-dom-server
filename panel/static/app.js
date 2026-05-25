@@ -2329,7 +2329,15 @@ function openSchedule() {
         var modeLabels = { sunset: 'по закату', sunrise: 'по рассвету' };
         var timeWidget = e.mode
           ? '<span class="sched-mode-lbl">' + (modeLabels[e.mode] || e.mode) + '</span>'
-          : '<input class="sched-time" type="time" value="' + hh + ':' + mm + '">';
+          : '<div class="sched-tp" data-h="' + e.hour + '" data-m="' + e.minute + '">' +
+              '<button class="tp-btn" onclick="tpAdj(this,\'h\',-1)">−</button>' +
+              '<span class="tp-hh tp-val">' + hh + '</span>' +
+              '<button class="tp-btn" onclick="tpAdj(this,\'h\',1)">+</button>' +
+              '<span class="tp-sep">:</span>' +
+              '<button class="tp-btn" onclick="tpAdj(this,\'m\',-5)">−</button>' +
+              '<span class="tp-mm tp-val">' + mm + '</span>' +
+              '<button class="tp-btn" onclick="tpAdj(this,\'m\',5)">+</button>' +
+            '</div>';
         row.innerHTML =
           '<label class="tswitch" onclick="event.stopPropagation()">' +
             '<input type="checkbox" class="sched-entry-en tchk"' + (e.enabled ? ' checked' : '') + '>' +
@@ -2359,13 +2367,12 @@ function saveSchedule() {
     var id = row.dataset.id;
     var orig = (_schedCache.entries || []).find(function(e) { return e.id === id; });
     if (!orig) return;
-    var timeEl = row.querySelector('.sched-time');
+    var tp = row.querySelector('.sched-tp');
     var enEl = row.querySelector('.sched-entry-en');
     var update = { enabled: enEl ? enEl.checked : orig.enabled };
-    if (!orig.mode && timeEl) {
-      var parts = timeEl.value.split(':');
-      update.hour = parseInt(parts[0], 10) || 0;
-      update.minute = parseInt(parts[1], 10) || 0;
+    if (!orig.mode && tp) {
+      update.hour = parseInt(tp.dataset.h, 10) || 0;
+      update.minute = parseInt(tp.dataset.m, 10) || 0;
     }
     entries.push(Object.assign({}, orig, update));
   });
@@ -2386,6 +2393,21 @@ function saveSchedule() {
     .catch(function(err) { console.error('schedule save', err); });
 }
 
+
+function tpAdj(btn, field, delta) {
+  var tp = btn;
+  while (tp && !tp.classList.contains('sched-tp')) tp = tp.parentNode;
+  if (!tp) return;
+  if (field === 'h') {
+    var h = ((parseInt(tp.dataset.h, 10) + delta) + 24) % 24;
+    tp.dataset.h = h;
+    tp.querySelector('.tp-hh').textContent = String(h).padStart(2, '0');
+  } else {
+    var m = ((parseInt(tp.dataset.m, 10) + delta) + 60) % 60;
+    tp.dataset.m = m;
+    tp.querySelector('.tp-mm').textContent = String(m).padStart(2, '0');
+  }
+}
 // ─── SLEEP TIMER ─────────────────────────────────────────────────────────────
 var _sleepTimer = null;
 var _sleepEnd = 0;
@@ -2453,3 +2475,26 @@ function _updateSleepBtn() {
     btn.classList.remove('active');
   }
 }
+
+// ── Display brightness overlay ───────────────────────────────────────────────
+(function initDimOverlay() {
+  var overlay = document.getElementById('dim-overlay');
+  if (!overlay) return;
+
+  function applyAlpha(val) {
+    overlay.style.background = 'rgba(0,0,0,' + ((100 - val) / 100).toFixed(2) + ')';
+  }
+
+  function apply(settings, sun) {
+    if (!settings.enabled) { applyAlpha(100); return; }
+    applyAlpha(sun && sun.is_night ? settings.night_dim : settings.brightness);
+  }
+
+  Promise.all([
+    fetch('/api/display/settings').then(function(r){ return r.json(); }).catch(function(){ return null; }),
+    fetch('/api/sun/times').then(function(r){ return r.json(); }).catch(function(){ return null; })
+  ]).then(function(res) {
+    var settings = res[0] || { brightness: 100, night_dim: 50, enabled: true };
+    apply(settings, res[1]);
+  });
+})();
