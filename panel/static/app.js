@@ -376,35 +376,27 @@ document.querySelectorAll('.ctrl-btn[data-ch=""]').forEach(btn => {
 });
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-const ACCS = {
-  '':         { pass: '',      name: 'Тест юзер' },
-  'volosati': { pass: '12345', name: 'volosati'   },
-  'max':      { pass: '12345', name: 'max'         },
-  'polini':   { pass: '12345', name: 'polini'      },
-};
-
-function getUser() { try { return JSON.parse(sessionStorage.getItem('sdom_u')); } catch { return null; } }
 function updateMenu() {
-  const u = getUser();
-  document.getElementById('menu-uname').textContent = u ? u.name : '';
-  document.getElementById('menu-logged').classList.toggle('visible', !!u);
+  fetch('/api/build')
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      var el = document.getElementById('menu-uname');
+      if (!el) return;
+      var hash = d.commit || '';
+      var dt = '';
+      if (d.date) {
+        var m = new Date(d.date);
+        if (!isNaN(m)) {
+          dt = ' · ' + m.toLocaleString('ru-RU', {
+            day: 'numeric', month: 'short',
+            hour: '2-digit', minute: '2-digit'
+          });
+        }
+      }
+      el.textContent = hash + dt;
+    })
+    .catch(function() {});
 }
-function doLogin() {
-  const l = document.getElementById('login-in').value;
-  const p = document.getElementById('pass-in').value;
-  const a = ACCS[l];
-  const err = document.getElementById('menu-err');
-  if (!a || a.pass !== p) { err.textContent = 'Неверный логин или пароль'; return; }
-  err.textContent = '';
-  sessionStorage.setItem('sdom_u', JSON.stringify({ name: a.name }));
-  document.getElementById('login-in').value = '';
-  document.getElementById('pass-in').value  = '';
-  updateMenu();
-}
-function doLogout() { sessionStorage.removeItem('sdom_u'); updateMenu(); }
-
-document.getElementById('pass-in').addEventListener('keydown',  e => { if (e.key === 'Enter') doLogin(); });
-document.getElementById('login-in').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('pass-in').focus(); });
 
 // ── Menu open/close ───────────────────────────────────────────────────────────
 const menu = document.getElementById('menu'), overlay = document.getElementById('overlay');

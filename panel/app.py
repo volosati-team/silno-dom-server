@@ -706,6 +706,20 @@ async def api_dbg_log_recent():
 # Mounted after the API so /api/* takes precedence.
 # ---------------------------------------------------------------------------
 
+@app.get("/api/build", include_in_schema=False)
+async def api_build():
+    import subprocess
+    try:
+        out = subprocess.check_output(
+            ["git", "log", "-1", "--format=%h %cI"],
+            cwd=str(BASE_DIR), text=True, timeout=3
+        ).strip()
+        parts = out.split(" ", 1)
+        return json_response({"commit": parts[0], "date": parts[1] if len(parts) > 1 else ""})
+    except Exception:
+        return json_response({"commit": "unknown", "date": ""})
+
+
 @app.get("/api/version", include_in_schema=False)
 async def api_version():
     # Used by the panel JS to detect server-side asset changes and trigger
