@@ -61,4 +61,49 @@
 
   load();
   checkBtAgent();
+  initPasswordSection();
 })();
+
+function initPasswordSection() {
+  var btn = document.getElementById('change-pw-btn');
+  if (!btn) return;
+  var u = null;
+  try { u = JSON.parse(sessionStorage.getItem('sdom_u')); } catch(e) {}
+  if (!u || u.name === 'dev') {
+    btn.disabled = true;
+    document.getElementById('old-pass').disabled = true;
+    document.getElementById('new-pass').disabled = true;
+    var hint = document.getElementById('pw-result');
+    if (hint) hint.textContent = 'dev-юзер: пароль не меняется';
+  }
+}
+
+function changePassword() {
+  var u = null;
+  try { u = JSON.parse(sessionStorage.getItem('sdom_u')); } catch(e) {}
+  if (!u || u.name === 'dev') return;
+  var oldPass = document.getElementById('old-pass').value;
+  var newPass = document.getElementById('new-pass').value;
+  var result = document.getElementById('pw-result');
+  result.textContent = '…';
+  result.style.color = '';
+  fetch('/api/auth/change-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: u.name, old_password: oldPass, new_password: newPass })
+  }).then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (d.ok) {
+      result.textContent = 'Пароль изменён ✓';
+      result.style.color = 'var(--yellow)';
+      document.getElementById('old-pass').value = '';
+      document.getElementById('new-pass').value = '';
+    } else {
+      result.textContent = d.error === 'wrong_password' ? 'Неверный текущий пароль' : 'Ошибка';
+      result.style.color = '#cc6666';
+    }
+  }).catch(function() {
+    result.textContent = 'Ошибка подключения';
+    result.style.color = '#cc6666';
+  });
+}

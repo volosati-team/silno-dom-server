@@ -194,3 +194,21 @@ body {
   color: var(--muted);
   line-height: 1.5;
 }
+
+/* ── Password section ── */
+.adm-pw-input {
+  flex: 1; background: #111120; border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 12px; color: var(--text); font-size: 14px;
+  outline: none; transition: border-color 0.15s;
+}
+.adm-pw-input:focus { border-color: var(--yellow); }
+.adm-pw-input::placeholder { color: var(--muted); }
+
+.adm-pw-btn {
+  margin-top: 12px; width: 100%; padding: 12px;
+  background: var(--yellow); color: var(--black);
+  border: none; border-radius: 8px; font-size: 14px; font-weight: 700;
+  cursor: pointer; letter-spacing: 0.04em; transition: opacity 0.15s;
+}
+.adm-pw-btn:active { opacity: 0.7; }
+.adm-pw-btn:disabled { background: #2a2a3a; color: var(--muted); cursor: default; }

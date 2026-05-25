@@ -376,18 +376,11 @@ document.querySelectorAll('.ctrl-btn[data-ch=""]').forEach(btn => {
 });
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-const ACCS = {
-  'volosati': { pass: '12345', name: 'volosati' },
-  'max':      { pass: '12345', name: 'max'       },
-  'polini':   { pass: '12345', name: 'polini'    },
-};
-
 function getUser() { try { return JSON.parse(sessionStorage.getItem('sdom_u')); } catch { return null; } }
 function updateMenu() {
   const u = getUser();
   document.getElementById('menu-logged').classList.toggle('visible', !!u);
   if (u) {
-    // Show build info instead of username
     fetch('/api/build')
       .then(function(r) { return r.json(); })
       .then(function(d) {
@@ -405,16 +398,22 @@ function updateMenu() {
   }
 }
 function doLogin() {
-  const l = document.getElementById('login-in').value;
-  const p = document.getElementById('pass-in').value;
-  const a = ACCS[l];
-  const err = document.getElementById('menu-err');
-  if (!a || a.pass !== p) { err.textContent = 'Неверный логин или пароль'; return; }
-  err.textContent = '';
-  sessionStorage.setItem('sdom_u', JSON.stringify({ name: a.name }));
-  document.getElementById('login-in').value = '';
-  document.getElementById('pass-in').value  = '';
-  updateMenu();
+  var l = document.getElementById('login-in').value;
+  var p = document.getElementById('pass-in').value;
+  var err = document.getElementById('menu-err');
+  fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: l, password: p })
+  }).then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (!d.ok) { err.textContent = 'Неверный логин или пароль'; return; }
+    err.textContent = '';
+    sessionStorage.setItem('sdom_u', JSON.stringify({ name: d.name }));
+    document.getElementById('login-in').value = '';
+    document.getElementById('pass-in').value  = '';
+    updateMenu();
+  }).catch(function() { err.textContent = 'Ошибка подключения'; });
 }
 function doLogout() { sessionStorage.removeItem('sdom_u'); updateMenu(); }
 

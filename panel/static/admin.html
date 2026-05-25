@@ -60,6 +60,22 @@
     <p class="adm-hint">После установки: открыть приложение → шторка покажет «Listening on :8765». Настройки → Приложения → BT Agent → Батарея → Без ограничений. Если есть пункт «Автозапуск» — включить.</p>
   </section>
 
+  <section class="adm-section">
+    <h2 class="adm-section-title">Пароль</h2>
+
+    <div class="adm-row">
+      <label class="adm-lbl" for="old-pass">Текущий</label>
+      <input type="password" class="adm-pw-input" id="old-pass" placeholder="(пусто если не задан)">
+    </div>
+    <div class="adm-row">
+      <label class="adm-lbl" for="new-pass">Новый</label>
+      <input type="password" class="adm-pw-input" id="new-pass" placeholder="Новый пароль">
+    </div>
+
+    <button class="adm-pw-btn" id="change-pw-btn" onclick="changePassword()">Сменить пароль</button>
+    <p class="adm-hint" id="pw-result"></p>
+  </section>
+
 </main>
 
 <script src="/static/admin.js"></script>

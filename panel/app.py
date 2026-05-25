@@ -17,6 +17,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -1062,6 +1063,67 @@ async def api_display_settings_put(request: Request):
 async def admin_page():
     path = STATIC_DIR / "admin.html"
     return FileResponse(str(path), media_type="text/html")
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+_PROD_USERS = ["volosati", "max"]
+
+
+def _is_dev_branch() -> bool:
+    try:
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=str(BASE_DIR), text=True, timeout=2
+        ).strip()
+        return branch != "main"
+    except Exception:
+        return False
+
+
+def _allowed_users() -> list:
+    users = list(_PROD_USERS)
+    if _is_dev_branch():
+        users = [""] + users  # empty = quick-login dev user
+    return users
+
+
+@app.post("/api/auth/login", include_in_schema=False)
+async def auth_login(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return json_response({"ok": False, "error": "bad_json"}, status=400)
+    username = body.get("username", "")
+    password = body.get("password", "")
+    if username not in _allowed_users():
+        return json_response({"ok": False, "error": "invalid"}, status=401)
+    if username == "":
+        if password != "":
+            return json_response({"ok": False, "error": "invalid"}, status=401)
+        return json_response({"ok": True, "name": "dev"})
+    stored = kv_get(f"panel:pass:{username}") or ""
+    if password != stored:
+        return json_response({"ok": False, "error": "invalid"}, status=401)
+    return json_response({"ok": True, "name": username})
+
+
+@app.post("/api/auth/change-password", include_in_schema=False)
+async def auth_change_password(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return json_response({"ok": False, "error": "bad_json"}, status=400)
+    username = body.get("username", "")
+    old_pass = body.get("old_password", "")
+    new_pass = body.get("new_password", "")
+    if username == "" or username not in _PROD_USERS:
+        return json_response({"ok": False, "error": "invalid_user"}, status=400)
+    stored = kv_get(f"panel:pass:{username}") or ""
+    if old_pass != stored:
+        return json_response({"ok": False, "error": "wrong_password"}, status=401)
+    kv_put(f"panel:pass:{username}", new_pass)
+    return json_response({"ok": True})
 
 
 @app.get("/api/sun/times", include_in_schema=False)
