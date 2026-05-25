@@ -25,7 +25,6 @@
       <path d="M3216.702 790.97C3400.3537 790.97 3519.0047 683.4625 3519.0047 513.6526C3519.0047 511.6766 3519.0047 509.7005 3519.0047 507.7243C3519.0047 334.9503 3389.0175 242.2631 3221.2486 242.2631C3058.0085 242.2631 2925.7604 345.3322 2925.7604 512.9121C2925.7604 514.8882 2925.7604 516.8644 2925.7604 518.8405C2925.7604 683.4625 3034.5729 790.97 3216.702 790.97ZM3221.9904 636.7517C3166.8211 636.7517 3135.8539 598.1874 3135.8539 518.1033C3135.8539 516.1273 3135.8539 514.1512 3135.8539 512.175C3135.8539 431.3469 3170.6081 395.7521 3221.2486 395.7521C3272.6309 395.7521 3308.9076 430.6064 3308.9076 512.175C3308.9076 514.1512 3308.9076 516.1273 3308.9076 518.1033C3308.9076 595.2108 3274.8954 636.7517 3221.9904 636.7517Z"/>
     </svg>
   </div>
-  <div id="header-clock"></div>
   <button id="menu-btn"><span></span><span></span><span></span></button>
 </div>
 
@@ -36,11 +35,6 @@
   <div class="ztab" data-zone="hall">Холл</div>
   <div class="ztab" data-zone="workshop">Мастерская</div>
   <div class="ztab" data-zone="basement">Подвал</div>
-  <button id="sched-btn" onclick="openSchedule()" title="Расписание">
-    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-    </svg>
-  </button>
   <button id="sleep-btn" onclick="openSleepTimer()" title="Таймер выключения">
     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -404,6 +398,16 @@
       <span>Консоль</span>
       <input type="checkbox" id="console-toggle-input">
     </label>
+    <div class="menu-slider-row">
+      <span class="menu-slider-lbl">Яркость</span>
+      <input type="range" class="disp-range" id="disp-brightness" min="10" max="100" value="100">
+      <span class="menu-slider-val" id="disp-brightness-val">100%</span>
+    </div>
+    <div class="menu-slider-row">
+      <span class="menu-slider-lbl">Ночью</span>
+      <input type="range" class="disp-range" id="disp-night-dim" min="10" max="100" value="50">
+      <span class="menu-slider-val" id="disp-night-dim-val">50%</span>
+    </div>
     <button id="logout" onclick="doLogout()">Выйти</button>
   </div>
 </nav>
