@@ -993,6 +993,54 @@ async def fallthrough_streaming_proxy(path: str, request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Display brightness settings
+# ---------------------------------------------------------------------------
+
+DISPLAY_KV_KEY = "display_settings"
+DISPLAY_DEFAULTS: dict = {"brightness": 100, "night_dim": 50, "enabled": True}
+
+
+@app.get("/api/display/settings", include_in_schema=False)
+async def api_display_settings_get():
+    raw = kv_get(DISPLAY_KV_KEY)
+    if raw:
+        try:
+            return json_response({**DISPLAY_DEFAULTS, **json.loads(raw)})
+        except Exception:
+            pass
+    return json_response(DISPLAY_DEFAULTS)
+
+
+@app.put("/api/display/settings", include_in_schema=False)
+async def api_display_settings_put(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return json_response({"ok": False, "error": "bad_json"}, status=400)
+    if not isinstance(body, dict):
+        return json_response({"ok": False, "error": "invalid_schema"}, status=400)
+    merged = {**DISPLAY_DEFAULTS, **{k: body[k] for k in ("brightness", "night_dim", "enabled") if k in body}}
+    kv_put(DISPLAY_KV_KEY, json.dumps(merged))
+    return json_response({"ok": True})
+
+
+@app.get("/api/sun/times", include_in_schema=False)
+async def api_sun_times():
+    now = datetime.now(tz=MSK)
+    sunset_h, sunset_m = _sun_time("sunset")
+    sunrise_h, sunrise_m = _sun_time("sunrise")
+    now_min = now.hour * 60 + now.minute
+    sunset_min = sunset_h * 60 + sunset_m
+    is_night = now_min >= sunset_min or now_min < 4 * 60
+    return json_response({
+        "sunset": f"{sunset_h:02d}:{sunset_m:02d}",
+        "sunrise": f"{sunrise_h:02d}:{sunrise_m:02d}",
+        "now_msk": f"{now.hour:02d}:{now.minute:02d}",
+        "is_night": is_night,
+    })
+
+
+# ---------------------------------------------------------------------------
 # Light schedule endpoints
 # ---------------------------------------------------------------------------
 

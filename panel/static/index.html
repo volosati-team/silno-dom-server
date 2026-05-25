@@ -404,6 +404,16 @@
       <span>Консоль</span>
       <input type="checkbox" id="console-toggle-input">
     </label>
+    <div class="menu-slider-row">
+      <span class="menu-slider-lbl">Яркость</span>
+      <input type="range" class="disp-range" id="disp-brightness" min="10" max="100" value="100">
+      <span class="menu-slider-val" id="disp-brightness-val">100%</span>
+    </div>
+    <div class="menu-slider-row">
+      <span class="menu-slider-lbl">Ночью</span>
+      <input type="range" class="disp-range" id="disp-night-dim" min="10" max="100" value="50">
+      <span class="menu-slider-val" id="disp-night-dim-val">50%</span>
+    </div>
     <button id="logout" onclick="doLogout()">Выйти</button>
   </div>
 </nav>

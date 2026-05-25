@@ -2453,3 +2453,95 @@ function _updateSleepBtn() {
     btn.classList.remove('active');
   }
 }
+
+// ─── DISPLAY BRIGHTNESS ──────────────────────────────────────────────────────
+(function () {
+  var DEFAULTS = { brightness: 100, night_dim: 50, enabled: true };
+  var _disp = Object.assign({}, DEFAULTS);
+  var _nightNow = false;
+  var _saveTimer = null;
+
+  function _effective() {
+    if (!_disp.enabled) return 100;
+    return _nightNow
+      ? Math.round(_disp.brightness * _disp.night_dim / 100)
+      : _disp.brightness;
+  }
+
+  function _applyFilter() {
+    var v = _effective();
+    document.documentElement.style.filter = v < 100 ? 'brightness(' + v + '%)' : '';
+  }
+
+  function _updateUI() {
+    var bEl = document.getElementById('disp-brightness');
+    var bVal = document.getElementById('disp-brightness-val');
+    var nEl = document.getElementById('disp-night-dim');
+    var nVal = document.getElementById('disp-night-dim-val');
+    if (bEl) bEl.value = _disp.brightness;
+    if (bVal) bVal.textContent = _disp.brightness + '%';
+    if (nEl) nEl.value = _disp.night_dim;
+    if (nVal) nVal.textContent = _disp.night_dim + '%';
+  }
+
+  function _save() {
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(function () {
+      fetch('/api/display/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(_disp),
+      }).catch(function () {});
+    }, 600);
+  }
+
+  function _checkNight() {
+    fetch('/api/sun/times')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        _nightNow = !!d.is_night;
+        _applyFilter();
+      })
+      .catch(function () {});
+  }
+
+  function _initSliders() {
+    var bEl = document.getElementById('disp-brightness');
+    var nEl = document.getElementById('disp-night-dim');
+    if (bEl) {
+      bEl.addEventListener('input', function () {
+        _disp.brightness = parseInt(this.value, 10);
+        var v = document.getElementById('disp-brightness-val');
+        if (v) v.textContent = _disp.brightness + '%';
+        _applyFilter();
+        _save();
+      });
+    }
+    if (nEl) {
+      nEl.addEventListener('input', function () {
+        _disp.night_dim = parseInt(this.value, 10);
+        var v = document.getElementById('disp-night-dim-val');
+        if (v) v.textContent = _disp.night_dim + '%';
+        if (_nightNow) _applyFilter();
+        _save();
+      });
+    }
+  }
+
+  function init() {
+    fetch('/api/display/settings')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        _disp = Object.assign({}, DEFAULTS, d);
+        _updateUI();
+        _checkNight();
+      })
+      .catch(function () { _checkNight(); });
+
+    _initSliders();
+    setInterval(_checkNight, 60000);
+  }
+
+  if (document.readyState !== 'loading') init();
+  else document.addEventListener('DOMContentLoaded', init);
+})();
