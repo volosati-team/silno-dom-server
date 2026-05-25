@@ -395,6 +395,12 @@
   </div>
   <hr class="menu-div">
   <div class="menu-label">Настройки</div>
+  <div id="menu-form">
+    <input class="minput" id="login-in" type="text" autocomplete="username" placeholder="Логин">
+    <input class="minput" id="pass-in"  type="password" autocomplete="current-password" placeholder="Пароль">
+    <button class="mbtn" onclick="doLogin()">Войти</button>
+    <div id="menu-err"></div>
+  </div>
   <div id="menu-logged">
     <div class="menu-user" id="menu-uname"></div>
     <a class="mlink" href="/accounts" target="_blank" rel="noopener">Аккаунты</a>
@@ -406,6 +412,7 @@
       <span>Консоль</span>
       <input type="checkbox" id="console-toggle-input">
     </label>
+    <button id="logout" onclick="doLogout()">Выйти</button>
   </div>
 </nav>
 

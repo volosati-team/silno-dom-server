@@ -1100,9 +1100,29 @@ html, body {
   font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
   color: var(--dim); padding: 0 20px 12px;
 }
+#menu-form { padding: 0 20px; display: flex; flex-direction: column; gap: 10px; }
+
+.minput {
+  background: #111120; border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 12px; color: var(--text); font-size: 14px;
+  outline: none; touch-action: auto; -webkit-user-select: auto; user-select: auto;
+  transition: border-color 0.15s;
+}
+.minput:focus { border-color: var(--yellow); }
+.minput::placeholder { color: var(--dim); }
+
+.mbtn {
+  background: var(--yellow); color: var(--black); border: none; border-radius: 8px;
+  padding: 10px; font-size: 13px; font-weight: 700; letter-spacing: 0.05em;
+  cursor: pointer; touch-action: auto; transition: opacity 0.15s;
+}
+.mbtn:active { opacity: 0.7; }
+
+#menu-err { font-size: 12px; color: #cc6666; min-height: 16px; }
 .menu-div { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 
-#menu-logged { display: flex; flex-direction: column; }
+#menu-logged { display: none; flex-direction: column; }
+#menu-logged.visible { display: flex; }
 .menu-user { padding: 0 20px 12px; font-size: 13px; color: var(--yellow); letter-spacing: 0.06em; }
 
 .mlink {
