@@ -985,6 +985,14 @@ html, body {
   cursor: pointer;
 }
 
+/* ─── BT BUTTON ─────────────────────────────────────────────────────────── */
+#bt-btn {
+  flex-shrink: 0; padding: 0 10px;
+  background: none; border: none;
+  color: #ffffff55; cursor: pointer; transition: color 0.15s;
+}
+#bt-btn:active, #bt-btn.active { color: var(--yellow); }
+
 /* ─── SLEEP BUTTON ───────────────────────────────────────────────────────── */
 #sleep-btn {
   flex-shrink: 0;

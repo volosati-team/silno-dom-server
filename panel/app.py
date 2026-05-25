@@ -993,6 +993,22 @@ async def fallthrough_streaming_proxy(path: str, request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Bluetooth toggle (proxies to Android APK/Termux agent on localhost:8765)
+# ---------------------------------------------------------------------------
+
+BT_AGENT_URL = "http://127.0.0.1:8765"
+
+
+@app.post("/api/bt/toggle", include_in_schema=False)
+async def api_bt_toggle():
+    try:
+        r = await _http_client().get(f"{BT_AGENT_URL}/bt-toggle", timeout=3.0)
+        return json_response({"ok": True, "agent": r.json()})
+    except Exception as exc:
+        return json_response({"ok": False, "error": "bt_agent_unreachable", "detail": str(exc)}, status=503)
+
+
+# ---------------------------------------------------------------------------
 # Display brightness settings
 # ---------------------------------------------------------------------------
 
