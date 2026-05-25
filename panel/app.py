@@ -1111,7 +1111,7 @@ async def auth_login(request: Request):
         body = await request.json()
     except Exception:
         return json_response({"ok": False, "error": "bad_json"}, status=400)
-    username = body.get("username", "")
+    username = body.get("username", "").lower()
     password = body.get("password", "")
     if username not in _allowed_users():
         return json_response({"ok": False, "error": "invalid"}, status=401)
@@ -1130,7 +1130,7 @@ async def auth_change_password(request: Request):
         body = await request.json()
     except Exception:
         return json_response({"ok": False, "error": "bad_json"}, status=400)
-    username = body.get("username", "")
+    username = body.get("username", "").lower()
     old_pass = body.get("old_password", "")
     new_pass = body.get("new_password", "")
     if username == "" or username not in _PROD_USERS:
