@@ -2498,3 +2498,34 @@ function _updateSleepBtn() {
     apply(settings, res[1]);
   });
 })();
+
+// ── BT Agent toggle (localhost:8765) ──────────────────────────────────────────
+var _btPending = false;
+
+function btToggle() {
+  if (_btPending) return;
+  var chk = document.getElementById('bt-chk');
+  if (!chk) return;
+  var next = !chk.checked;
+  chk.checked = next;
+  _btPending = true;
+  fetch('http://localhost:8765/bt-toggle', { signal: AbortSignal.timeout(4000) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      _btPending = false;
+      chk.checked = d.state === 'enabled';
+    })
+    .catch(function() {
+      _btPending = false;
+      chk.checked = !next;
+    });
+}
+
+(function btStatusInit() {
+  var chk = document.getElementById('bt-chk');
+  if (!chk) return;
+  fetch('http://localhost:8765/bt-status', { signal: AbortSignal.timeout(2000) })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { chk.checked = d.enabled === true; })
+    .catch(function() {});
+})();
