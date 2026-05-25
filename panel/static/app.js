@@ -1509,6 +1509,7 @@ var ICON_PAUSE = '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" 
 function setBarPlayPauseIcon(playing) {
   var el = document.getElementById('sc-playpause');
   if (el) el.innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
+  btSetState(playing);
 }
 
 function ensureNativeAudio() {
@@ -2499,15 +2500,17 @@ function _updateSleepBtn() {
   });
 })();
 
-// ── BT Agent toggle (localhost:8765) ──────────────────────────────────────────
+// ── BT Agent (localhost:8765) ─────────────────────────────────────────────────
 var _btPending = false;
 
-function btToggle() {
+// Called from setBarPlayPauseIcon: play=true → BT on, pause=false → BT off.
+// Guards against redundant toggles using the checkbox as state tracker.
+function btSetState(on) {
   if (_btPending) return;
   var chk = document.getElementById('bt-chk');
   if (!chk) return;
-  var next = !chk.checked;
-  chk.checked = next;
+  if (chk.checked === on) return;  // already at desired state
+  chk.checked = on;  // optimistic
   _btPending = true;
   fetch('http://localhost:8765/bt-toggle', { signal: AbortSignal.timeout(4000) })
     .then(function(r) { return r.json(); })
@@ -2517,8 +2520,16 @@ function btToggle() {
     })
     .catch(function() {
       _btPending = false;
-      chk.checked = !next;
+      chk.checked = !on;  // revert on error
     });
+}
+
+// Manual toggle from the BT button in zone-yard.
+function btToggle() {
+  if (_btPending) return;
+  var chk = document.getElementById('bt-chk');
+  if (!chk) return;
+  btSetState(!chk.checked);
 }
 
 (function btStatusInit() {
