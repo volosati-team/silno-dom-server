@@ -17,13 +17,18 @@ sleep 2
 # Pull latest in dev directory
 git pull --ff-only && echo "[$(date '+%H:%M:%S')] git pull OK" || echo "[$(date '+%H:%M:%S')] git pull FAILED"
 
-# Also pull stable worktree so 8080 stays in sync
-STABLE_DIR="$(dirname "$SCRIPT_DIR")/silno-dom-server-stable"
-if [ -d "$STABLE_DIR" ]; then
-    git -C "$STABLE_DIR" pull --ff-only origin main 2>&1 \
-        && echo "[$(date '+%H:%M:%S')] stable worktree pull OK" \
-        || echo "[$(date '+%H:%M:%S')] stable worktree pull FAILED"
-fi
+# Also pull worktrees so all ports stay in sync
+for _wt_name in stable logic; do
+    case "$_wt_name" in
+        stable) _wt_dir="$(dirname "$SCRIPT_DIR")/silno-dom-server-stable"; _wt_branch="main" ;;
+        logic)  _wt_dir="$(dirname "$SCRIPT_DIR")/silno-dom-server-logic"; _wt_branch="logic-dev" ;;
+    esac
+    if [ -d "$_wt_dir" ]; then
+        git -C "$_wt_dir" pull --ff-only "origin" "$_wt_branch" 2>&1 \
+            && echo "[$(date '+%H:%M:%S')] $_wt_name worktree pull OK" \
+            || echo "[$(date '+%H:%M:%S')] $_wt_name worktree pull FAILED"
+    fi
+done
 
 # Stop services
 pkill -f cloudflared 2>/dev/null; pkill -f home_mqtt_bridge 2>/dev/null

@@ -732,11 +732,11 @@ let activePlayer = 1; // 0=YT, 1=SC, 2=SP
 let ytPlaying = false, ytDuration = 0;
 var ytAutoNextTimer = null;
 function ytAutoNext() {
-  // Debounce: onStateChange(0) and infoDelivery(playerState=0) can both fire
   if (ytAutoNextTimer) return;
   ytAutoNextTimer = setTimeout(function() {
     ytAutoNextTimer = null;
-    scNext();
+    if (radioCurrent) radioPlayNext();
+    else scNext();
   }, 600);
 }
 
@@ -896,6 +896,7 @@ function scNext() {
     return;
   }
   if (activePlayer === 0) {
+    if (radioCurrent) { radioPlayNext(); return; }
     var idx = nativeSavedIndex();
     if (idx >= 0 && idx + 1 < savedList.length) { loadSavedItem(savedList[idx + 1]); return; }
     if (savedList.length > 0) { loadSavedItem(savedList[0]); return; } // wrap to first
@@ -2107,6 +2108,217 @@ function applySearchActive(activeUrl) {
 document.addEventListener('DOMContentLoaded', function () {
   var inp = document.getElementById('saved-search-input');
   if (inp) inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') searchSubmit(); });
+});
+
+// ─── RADIO PANEL ─────────────────────────────────────────────────────────────
+var radioSrc = 'youtube';
+var radioQueue = [];
+var radioCurrent = null;
+var radioPrefetchBusy = false;
+var RADIO_PREFETCH_BATCH = 5;
+
+function switchPanelTab(tab) {
+  document.querySelectorAll('.panel-tab').forEach(function (t) {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  document.querySelectorAll('.panel-tab-pane').forEach(function (p) {
+    p.classList.toggle('active', p.id === 'pane-' + tab);
+  });
+  if (tab === 'radio') {
+    var inp = document.getElementById('radio-search-input');
+    if (inp) setTimeout(function () { inp.focus(); }, 150);
+  }
+}
+
+function radioSetSrc(service) {
+  radioSrc = service;
+  document.getElementById('radio-search-yt').classList.toggle('active', service === 'youtube');
+  document.getElementById('radio-search-sc').classList.toggle('active', service === 'soundcloud');
+}
+
+async function radioSearchSubmit() {
+  var inp = document.getElementById('radio-search-input');
+  var q = (inp.value || '').trim();
+  if (!q) return;
+  if (radioSrc === 'soundcloud') {
+    document.getElementById('radio-results').innerHTML =
+      '<div class="search-status">SoundCloud — скоро</div>';
+    return;
+  }
+  var results = document.getElementById('radio-results');
+  results.innerHTML = '<div class="search-status">ищу...</div>';
+  try {
+    var r = await fetch('/api/search?q=' + encodeURIComponent(q) + '&src=youtube');
+    var d = await r.json();
+    if (!d || !d.results || !d.results.length) {
+      results.innerHTML = '<div class="search-status">ничего не нашлось'
+        + (d && d.error ? ' (' + d.error + ')' : '') + '</div>';
+      return;
+    }
+    results.innerHTML = '';
+    var cards = [];
+    d.results.forEach(function (it) {
+      var card = document.createElement('div');
+      card.className = 'radio-result-item search-item-probing';
+      card.dataset.vid = it.id;
+      var title = (it.title || '').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+      card.innerHTML =
+        '<img class="search-thumb" src="' + (it.thumbnail || '') + '" alt="">' +
+        '<div class="search-meta">' +
+          '<div class="search-title">' + escapeHtml(title) + '</div>' +
+          '<div class="search-channel">' + escapeHtml(it.channel || '') + '</div>' +
+        '</div>';
+      card.addEventListener('click', function () {
+        radioPlay({
+          url: it.url, service: 'youtube',
+          title: it.title, channel: it.channel,
+          thumbnail: it.thumbnail, vid: it.id
+        });
+      });
+      results.appendChild(card);
+      cards.push({ vid: it.id, el: card });
+    });
+    cards.forEach(function (c) { probeEmbeddable(c.vid, c.el); });
+  } catch (e) {
+    results.innerHTML = '<div class="search-status">ошибка: ' + (e && e.message) + '</div>';
+  }
+}
+
+function radioPlay(item) {
+  radioCurrent = item;
+  document.getElementById('radio-np-art').src = item.thumbnail || '';
+  document.getElementById('radio-np-title').textContent = cleanTitle(item.title || '');
+  document.getElementById('radio-np-channel').textContent = item.channel || '';
+  document.getElementById('radio-now-playing').classList.add('show');
+  document.querySelectorAll('#radio-results .radio-result-item').forEach(function (el) {
+    el.classList.toggle('active', el.dataset.vid === (item.vid || ''));
+  });
+  openMediaPanel();
+  loadSavedItemIframe(item);
+  radioStartPrefetch(item);
+}
+
+function radioStop() {
+  radioCurrent = null;
+  radioQueue = [];
+  document.getElementById('radio-now-playing').classList.remove('show');
+  document.getElementById('radio-np-art').src = '';
+  document.getElementById('radio-np-title').textContent = 'Ничего не играет';
+  document.getElementById('radio-np-channel').textContent = '';
+}
+
+async function radioStartPrefetch(item) {
+  radioQueue = [];
+  radioPrefetchBusy = true;
+  var query = (item.title || '').split(' - ')[0].split(' ft.')[0].split(' feat.')[0].split(' (')[0].split(' [')[0].trim();
+  if (!query || query.length < 2) { radioPrefetchBusy = false; return; }
+  try {
+    var r = await fetch('/api/search?q=' + encodeURIComponent(query) + '&src=youtube');
+    var d = await r.json();
+    if (!d || !d.results) { radioPrefetchBusy = false; return; }
+    var candidates = d.results.filter(function (it) {
+      return it.id !== (item.vid || '');
+    });
+    var batch = candidates.slice(0, RADIO_PREFETCH_BATCH);
+    var valid = await radioProbeBatch(batch);
+    radioQueue = valid;
+    console.log('radio prefetch: ' + radioQueue.length + ' valid of ' + batch.length + ' probed');
+    // If first batch had no valid results, try next batch
+    if (radioQueue.length === 0 && candidates.length > RADIO_PREFETCH_BATCH) {
+      var batch2 = candidates.slice(RADIO_PREFETCH_BATCH, RADIO_PREFETCH_BATCH * 2);
+      var valid2 = await radioProbeBatch(batch2);
+      radioQueue = valid2;
+      console.log('radio prefetch batch2: ' + radioQueue.length + ' valid');
+    }
+  } catch (e) { console.warn('radio prefetch error:', e); }
+  radioPrefetchBusy = false;
+}
+
+function radioProbeBatch(items) {
+  return new Promise(function (resolve) {
+    var valid = [];
+    var pending = items.length;
+    if (pending === 0) { resolve(valid); return; }
+    items.forEach(function (it) {
+      var cache = getProbeCache();
+      var entry = cache[it.id];
+      var now = Date.now();
+      if (entry && (now - entry.t) < YT_PROBE_TTL_MS) {
+        if (entry.playable !== false) valid.push(it);
+        pending--;
+        if (pending === 0) resolve(valid);
+        return;
+      }
+      var probe = document.createElement('iframe');
+      probe.style.cssText =
+        'position:absolute;left:-99999px;top:-99999px;width:200px;height:120px;border:0;visibility:hidden';
+      probe.setAttribute('allow', 'autoplay; encrypted-media');
+      var resolved = false;
+      function finish(playable, reason) {
+        if (resolved) return;
+        resolved = true;
+        window.removeEventListener('message', handler);
+        try { probe.remove(); } catch (_) {}
+        var c2 = getProbeCache();
+        c2[it.id] = { playable: playable, t: now, r: reason || '' };
+        setProbeCache(c2);
+        if (playable !== false) valid.push(it);
+        pending--;
+        if (pending === 0) resolve(valid);
+      }
+      function handler(e) {
+        if (!e || typeof e.data !== 'string') return;
+        if (e.source !== probe.contentWindow) return;
+        if (!e.origin || !/youtube(-nocookie)?\.com$/.test(new URL(e.origin).hostname)) return;
+        try {
+          var d2 = JSON.parse(e.data);
+          if (d2.event === 'onError') finish(false, 'onError-' + d2.info);
+          else if (d2.event === 'onStateChange'
+            || (d2.event === 'infoDelivery' && d2.info && typeof d2.info.playerState !== 'undefined'))
+            finish(true, 'ok');
+          else if (d2.event === 'initialDelivery' && d2.info && d2.info.videoData && d2.info.videoData.errorCode)
+            finish(false, 'errorCode-' + d2.info.videoData.errorCode);
+        } catch (_) {}
+      }
+      window.addEventListener('message', handler);
+      document.body.appendChild(probe);
+      probe.src = 'https://www.youtube-nocookie.com/embed/' + it.id
+        + '?autoplay=0&enablejsapi=1';
+      probe.addEventListener('load', function () {
+        try {
+          probe.contentWindow.postMessage(
+            JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
+        } catch (_) {}
+      });
+      setTimeout(function () { finish(true, 'timeout'); }, 4000);
+    });
+  });
+}
+
+function radioPlayNext() {
+  if (radioQueue.length > 0) {
+    var next = radioQueue.shift();
+    console.log('radio: playing next from queue:', next.title);
+    radioCurrent = next;
+    document.getElementById('radio-np-art').src = next.thumbnail || '';
+    document.getElementById('radio-np-title').textContent = cleanTitle(next.title || '');
+    document.getElementById('radio-np-channel').textContent = next.channel || '';
+    loadSavedItemIframe(next);
+    radioStartPrefetch(next);
+  } else if (radioCurrent) {
+    console.log('radio: queue empty, refetching...');
+    radioStartPrefetch(radioCurrent);
+    setTimeout(function () {
+      if (radioQueue.length > 0) radioPlayNext();
+    }, 6000);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+  var inp = document.getElementById('radio-search-input');
+  if (inp) inp.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); radioSearchSubmit(); }
+  });
 });
 
 // ─── SAVE-CURRENT-TRACK button (next to #sc-track-title) ────────────────────

@@ -91,6 +91,21 @@ else
     log "dragonfly bridge pid=$!"
 fi
 
+# Media panel — logic-dev (port 8084) — runs from git worktree locked to logic-dev
+LOGIC_DIR="$(dirname "$SCRIPT_DIR")/silno-dom-server-logic"
+LOGIC_PORT="${LOGIC_PANEL_PORT:-8084}"
+if pgrep -f "panel.app:app.*--port ${LOGIC_PORT}" > /dev/null; then
+    log "panel (logic) already running on ${LOGIC_PORT}, skip"
+elif [ -d "$LOGIC_DIR" ]; then
+    log "starting logic panel from worktree $LOGIC_DIR (port ${LOGIC_PORT})..."
+    mkdir -p "$LOGIC_DIR/logs"
+    (cd "$LOGIC_DIR" && nohup python3 -m uvicorn panel.app:app --host 0.0.0.0 --port "${LOGIC_PORT}" >> logs/panel-logic.log 2>&1) &
+    log "logic panel pid=$!"
+else
+    log "WARNING: worktree $LOGIC_DIR not found — logic panel NOT started on ${LOGIC_PORT}"
+    log "  Run: git worktree add ../silno-dom-server-logic logic-dev"
+fi
+
 # Audio streaming resolver (yt-dlp wrapper for kiosk native <audio>)
 if pgrep -f "uvicorn streaming.app:app" > /dev/null; then
     log "streaming already running, skip"
@@ -112,9 +127,10 @@ if command -v cloudflared &>/dev/null; then
     fi
 fi
 
-log "done. stable panel:  http://localhost:${PANEL_PORT:-8080}"
-log "done.    dev panel:  http://localhost:${DEV_PANEL_PORT:-8082}"
-log "done.   light panel: http://localhost:${WEB_PORT:-8081}"
+log "done. stable panel: http://localhost:${PANEL_PORT:-8080}"
+log "done.    dev panel: http://localhost:${DEV_PANEL_PORT:-8082}"
+log "done.  logic panel: http://localhost:${LOGIC_PORT:-8084}"
+log "done.  light panel: http://localhost:${WEB_PORT:-8081}"
 log "cf url:  grep 'trycloudflare.com' logs/cf.log"
 
 # Auto-update: poll GitHub every 5 min, run update.sh when HEAD drifts from origin
