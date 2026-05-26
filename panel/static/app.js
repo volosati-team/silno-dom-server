@@ -165,19 +165,14 @@
 })();
 
 // ── Clock ─────────────────────────────────────────────────────────────────────
+const D = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+const M = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
 function tick() {
   const n = new Date();
-  const h = n.getHours() % 12;
-  const m = n.getMinutes();
-  const s = n.getSeconds();
-  const hDeg = h * 30 + m * 0.5;
-  const mDeg = m * 6 + s * 0.1;
-  const clkH = document.getElementById('clk-h');
-  const clkM = document.getElementById('clk-m');
-  if (clkH) clkH.setAttribute('transform', `rotate(${hDeg},22,22)`);
-  if (clkM) clkM.setAttribute('transform', `rotate(${mDeg},22,22)`);
+  document.getElementById('header-clock').textContent =
+    `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}  ${D[n.getDay()]} ${n.getDate()} ${M[n.getMonth()]}`;
 }
-tick(); setInterval(tick, 1000);
+tick(); setInterval(tick, 15000);
 
 const zoneClip  = document.getElementById('zone-clip');
 const zoneTrack = document.getElementById('zone-track');

@@ -40,9 +40,10 @@ html, body {
 
 #header-clock {
   flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 0.04em;
+  text-align: center;
 }
 
 #menu-btn {
