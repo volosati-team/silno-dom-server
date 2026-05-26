@@ -411,3 +411,59 @@ voloNuk при последнем контакте был на `fdb0f62` (manual
 - APK download
 - `#dim-overlay` инициализируется в `app.js` через `/api/display/settings` + `/api/sun/times`
 - Формула: alpha = (100 - brightness) / 100
+
+---
+
+## Session snapshot — 2026-05-26 MSK
+
+### Мерж feat/saved-panel-search → main
+
+PR #5 смержен. main теперь включает всё что было в feat/saved-panel-search:
+seed playlist, text clock (reverted from SVG), dump_saved.py, update.sh worktree pull.
+
+### Новая dev-ветка: dev/panel-next
+
+После мержа создана `dev/panel-next` от main (`56bf907`). На voloNuk 8082 переключён на эту ветку.
+
+### logic-dev: Radio слой на порту 8084
+
+Ветка `logic-dev` от `56bf907`, коммит `feec49d` (запушен в origin).
+
+**Что добавляет:**
+- Вертикальные табы Saved | Radio в левой панели
+- Radio-панель: поисковый инпут + YT/SC кнопки-иконки (SC пока заглушка)
+- Результаты поиска с Stage B iframe probe (переиспользован существующий `probeEmbeddable()`)
+- Тап по результату → играет, обновляется Now Playing бар внутри Radio-панели
+- Pre-fetch очередь: когда трек начинает играть, ищет 5 похожих (по названию), пробит через iframe; валидные идут в очередь. При конце трека (`onStateChange=0`) играет следующий из очереди. Если все 5 отвалились — берёт следующие 5.
+- `scNext()` и `ytAutoNext()` радио-aware: при активном radio прокручивают очередь а не saved-list
+- `start.sh`: порт 8084 для logic-dev worktree (опционально)
+- `update.sh`: пуллит both stable и logic worktrees
+
+**На voloNuk нужно:**
+```sh
+cd ~/silno-dom-server
+git fetch origin
+git worktree add ../silno-dom-server-logic logic-dev
+bash start.sh
+```
+
+### Port map (актуальный)
+
+| Port | Service | Branch | Notes |
+|------|---------|--------|-------|
+| 8080 | panel (stable) | main | worktree `../silno-dom-server-stable` |
+| 8081 | web (emergency light) | main | не трогать |
+| 8082 | panel (dev) | dev/panel-next | /admin доступен |
+| 8083 | streaming | main | yt-dlp wrapper |
+| 8084 | panel (logic) | logic-dev | **не поднят**, ждёт worktree на voloNuk |
+
+### Блокеры
+
+1. **Создать worktree на voloNuk** для logic-dev (см. выше)
+2. **Подтвердить работу Radio** на 8084 после поднятия
+3. **Слить logic-dev → dev/panel-next** после тестирования Radio
+
+### Связанные lisa-core issue
+
+- **#436** — whisper hook: parallel topic_loader + whisper_fallback дополнительныеContext колизия. Fix на ветке `fix/issue-436-whisper-topic-loader-merge`, коммит `204398c`. Ждёт мержа в main.
+- **#421** — moio-control CF Worker BACKEND устаревает при ротации cloudflared.
