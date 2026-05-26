@@ -1,0 +1,30 @@
+[
+  {
+    "id": 1779769247425,
+    "url": "https://youtube.com/playlist?list=PLfntQsWZoky36OX3Z9-Qy1D9BnwVqWNq9&si=IontxvHimFpc38F7",
+    "service": "youtube",
+    "title": "All Flavour Trip Mixes",
+    "thumbnail": "https://i.ytimg.com/vi/OoJoMlTMDjE/hqdefault.jpg"
+  },
+  {
+    "id": 1779769021250,
+    "url": "https://youtube.com/playlist?list=PLDkIYxOPHC4WgPV_lOeW6oa4-u9TytngE&si=irA1vyNjgIew7iQS",
+    "service": "youtube",
+    "title": "Acid Jazz",
+    "thumbnail": "https://i.ytimg.com/vi/Jx84hkCOfEM/hqdefault.jpg"
+  },
+  {
+    "id": 1779768856053,
+    "url": "https://soundcloud.com/crepitecollective?ref=clipboard&p=a&c=0&si=9fa9982f3c724b3bac5420eed3b966e7&utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing",
+    "service": "soundcloud",
+    "title": "Crépite.",
+    "thumbnail": "https://i1.sndcdn.com/avatars-nBpRXmAjvwYLoemM-CvVEug-t500x500.jpg"
+  },
+  {
+    "id": 1779768599455,
+    "url": "https://soundcloud.com/grahmanski?ref=clipboard&p=a&c=0&si=e8900aefd7ed4204946981d67fbdd954&utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing",
+    "service": "soundcloud",
+    "title": "Manski",
+    "thumbnail": "https://i1.sndcdn.com/avatars-zTUjJ6z5bjGt0Fky-y2qzMQ-t500x500.jpg"
+  }
+]

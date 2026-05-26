@@ -55,6 +55,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "panel.db"
+SEED_SAVED = DATA_DIR / "seed_saved_playlists.json"
 
 CORS_HEADERS = {"Access-Control-Allow-Origin": "*"}
 
@@ -633,7 +634,14 @@ async def api_sc_token(request: Request):
 @app.get("/api/saved-list")
 async def api_saved_list_get():
     raw = kv_get("saved_playlists")
-    return text_response(raw if raw is not None else "[]")
+    if raw is not None:
+        return text_response(raw)
+    # On fresh installs with empty KV, seed from the shared base playlist
+    if SEED_SAVED.exists():
+        seed = SEED_SAVED.read_text(encoding="utf-8")
+        kv_put("saved_playlists", seed)
+        return text_response(seed)
+    return text_response("[]")
 
 
 @app.put("/api/saved-list")
