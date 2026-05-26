@@ -14,8 +14,16 @@ sleep 2
 # Load env
 [ -f "$SCRIPT_DIR/.env" ] && set -a && source "$SCRIPT_DIR/.env" && set +a
 
-# Pull latest
+# Pull latest in dev directory
 git pull --ff-only && echo "[$(date '+%H:%M:%S')] git pull OK" || echo "[$(date '+%H:%M:%S')] git pull FAILED"
+
+# Also pull stable worktree so 8080 stays in sync
+STABLE_DIR="$(dirname "$SCRIPT_DIR")/silno-dom-server-stable"
+if [ -d "$STABLE_DIR" ]; then
+    git -C "$STABLE_DIR" pull --ff-only origin main 2>&1 \
+        && echo "[$(date '+%H:%M:%S')] stable worktree pull OK" \
+        || echo "[$(date '+%H:%M:%S')] stable worktree pull FAILED"
+fi
 
 # Stop services
 pkill -f cloudflared 2>/dev/null; pkill -f home_mqtt_bridge 2>/dev/null
