@@ -842,12 +842,16 @@ function scPlayPause() {
   }
   if (activePlayer === 3 && nativeAudio) {
     if (nativeAudio.paused) { try { nativeAudio.play(); } catch(e) {} }
-    else { try { nativeAudio.pause(); } catch(e) {} }
+    else { btSetState(false); try { nativeAudio.pause(); } catch(e) {} }
     return;
   }
-  if (activePlayer === 0) { ytPlaying ? ytCmd('pauseVideo') : ytCmd('playVideo'); }
+  if (activePlayer === 0) {
+    if (ytPlaying) { btSetState(false); ytCmd('pauseVideo'); }
+    else { ytCmd('playVideo'); }
+  }
   else if (scWidget) {
     if (scIsPlaying) {
+      btSetState(false);
       console.warn('scPlayPause: calling scWidget.pause()');
       try { scWidget.pause(); } catch(e) { console.warn('SC pause threw:', e); }
     } else {
@@ -1523,7 +1527,8 @@ var ICON_PAUSE = '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" 
 function setBarPlayPauseIcon(playing) {
   var el = document.getElementById('sc-playpause');
   if (el) el.innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
-  btSetState(playing);
+  // BT ON on any play; BT OFF only by explicit pause button press (scPlayPause)
+  if (playing) btSetState(true);
 }
 
 function ensureNativeAudio() {
