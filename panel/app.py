@@ -729,6 +729,43 @@ async def api_build():
         return json_response({"commit": "unknown", "date": ""})
 
 
+@app.post("/api/update", include_in_schema=False)
+async def api_update(request: Request):
+    """Trigger git pull + restart uvicorn (via touch of app.py for --reload)."""
+    import subprocess
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    token = (body.get("token") or "").strip()
+    if not token:
+        return json_response({"ok": False, "error": "token required"}, status=400)
+
+    # Set remote with token and pull current branch
+    branch = body.get("branch") or "main"
+    remote_url = f"https://{token}@github.com/volosati-team/silno-dom-server.git"
+    try:
+        subprocess.run(
+            ["git", "remote", "set-url", "origin", remote_url],
+            cwd=str(BASE_DIR), check=True, timeout=10,
+            capture_output=True, text=True,
+        )
+        result = subprocess.run(
+            ["git", "pull", "origin", branch],
+            cwd=str(BASE_DIR), timeout=30,
+            capture_output=True, text=True,
+        )
+        # Touch app.py so uvicorn --reload picks up changes
+        (BASE_DIR / "app.py").touch()
+        return json_response({
+            "ok": result.returncode == 0,
+            "stdout": result.stdout[-300:],
+            "stderr": result.stderr[-300:],
+        })
+    except Exception as e:
+        return json_response({"ok": False, "error": str(e)[:200]}, status=500)
+
+
 @app.get("/api/version", include_in_schema=False)
 async def api_version():
     # Used by the panel JS to detect server-side asset changes and trigger
