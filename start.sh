@@ -14,6 +14,40 @@ mkdir -p logs
 
 log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a logs/start.log; }
 
+# Windows host setup — firewall, portproxy cleanup, tinyproxy (idempotent)
+_win_setup() {
+    # Firewall: panel port 8080 must be allowed inbound
+    if netsh.exe advfirewall firewall show rule name=silno-panel-8080 > /dev/null 2>&1; then
+        log "WIN: firewall rule silno-panel-8080 OK"
+    else
+        log "WIN WARNING: firewall rule for port 8080 missing — panel unreachable from LAN"
+        log "WIN FIX: run as admin: netsh advfirewall firewall add rule name=silno-panel-8080 dir=in action=allow protocol=TCP localport=8080"
+    fi
+
+    # Portproxy: remove broken 8080 entry (WSL2 mirrored networking handles LAN natively)
+    if netsh.exe interface portproxy show all 2>/dev/null | grep -q ":8080"; then
+        log "WIN WARNING: stale portproxy for 8080 detected — this breaks LAN access in mirrored mode"
+        log "WIN FIX: run as admin: netsh interface portproxy delete v4tov4 listenport=8080 listenaddress=0.0.0.0"
+    fi
+
+    # Tinyproxy: tablet LAN media proxy (port 3128, RKN bypass)
+    if pgrep -x tinyproxy > /dev/null 2>&1; then
+        log "WIN: tinyproxy running OK"
+    else
+        log "WIN: tinyproxy not running — starting via powershell..."
+        powershell.exe -NonInteractive -File 'C:\Users\volosati\Scripts\tinyproxy_start.ps1' \
+            > /dev/null 2>&1 \
+            && log "WIN: tinyproxy start OK" \
+            || log "WIN WARNING: tinyproxy start via powershell failed"
+    fi
+}
+
+if command -v powershell.exe > /dev/null 2>&1; then
+    _win_setup || log "WARNING: _win_setup returned errors (non-fatal)"
+else
+    log "powershell.exe not available — skipping Windows host setup"
+fi
+
 # MQTT password file — create from env or defaults (silnodom/12345)
 export MQTT_USER="${MQTT_USER:-silnodom}"
 export MQTT_PASS="${MQTT_PASS:-12345}"
