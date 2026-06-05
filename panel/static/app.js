@@ -689,6 +689,15 @@ async function scLoadInWidget(url, autoplay = true) {
     };
     try { scWidget.bind(SC.Widget.Events.LOAD_PROGRESS, lpHandler); } catch(_) {}
     setTimeout(function(){ forcePlay('timeout-2500ms'); }, 2500);
+    // Native-stream fallback: if SC Widget is still silent 5.5s after forcePlay,
+    // stream directly via yt-dlp. nativePrimeForGesture() already armed the
+    // audio element with a muted loop, so play() succeeds without a fresh gesture.
+    setTimeout(function() {
+      if (!scIsPlaying) {
+        console.warn('scLoadInWidget: SC Widget silent after 5.5s — native stream fallback');
+        nativeReresolveAndPlay({ url: url, service: 'soundcloud' }, false, false);
+      }
+    }, 5500);
     scWidget.load(url, { auto_play: true, show_comments: false, show_reposts: false, show_teaser: false }, function() {
       console.log('scLoadInWidget: .load() callback fired');
       forcePlay('load-callback');
