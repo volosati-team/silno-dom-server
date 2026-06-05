@@ -14,20 +14,39 @@ mkdir -p logs
 
 log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a logs/start.log; }
 
-# Windows host setup — firewall, portproxy cleanup, tinyproxy (idempotent)
+# Windows host setup — firewall, portproxy cleanup, tinyproxy (idempotent, runs with elevated privileges via Task Scheduler)
 _win_setup() {
     # Firewall: panel port 8080 must be allowed inbound
     if netsh.exe advfirewall firewall show rule name=silno-panel-8080 > /dev/null 2>&1; then
-        log "WIN: firewall rule silno-panel-8080 OK"
+        log "WIN: firewall 8080 OK"
     else
-        log "WIN WARNING: firewall rule for port 8080 missing — panel unreachable from LAN"
-        log "WIN FIX: run as admin: netsh advfirewall firewall add rule name=silno-panel-8080 dir=in action=allow protocol=TCP localport=8080"
+        log "WIN: adding firewall rule for port 8080..."
+        netsh.exe advfirewall firewall add rule \
+            name="silno-panel-8080" dir=in action=allow protocol=TCP localport=8080 \
+            > /dev/null 2>&1 \
+            && log "WIN: firewall 8080 added" \
+            || log "WIN WARNING: firewall 8080 add failed — panel may be unreachable from LAN"
+    fi
+
+    # Firewall: tinyproxy port 3128 must be allowed inbound (tablet LAN media proxy)
+    if netsh.exe advfirewall firewall show rule name=tinyproxy-3128 > /dev/null 2>&1; then
+        log "WIN: firewall 3128 OK"
+    else
+        log "WIN: adding firewall rule for port 3128 (tinyproxy)..."
+        netsh.exe advfirewall firewall add rule \
+            name="tinyproxy-3128" dir=in action=allow protocol=TCP localport=3128 \
+            > /dev/null 2>&1 \
+            && log "WIN: firewall 3128 added" \
+            || log "WIN WARNING: firewall 3128 add failed — tablet media proxy may not work"
     fi
 
     # Portproxy: remove broken 8080 entry (WSL2 mirrored networking handles LAN natively)
     if netsh.exe interface portproxy show all 2>/dev/null | grep -q ":8080"; then
-        log "WIN WARNING: stale portproxy for 8080 detected — this breaks LAN access in mirrored mode"
-        log "WIN FIX: run as admin: netsh interface portproxy delete v4tov4 listenport=8080 listenaddress=0.0.0.0"
+        log "WIN: removing stale portproxy for 8080..."
+        netsh.exe interface portproxy delete v4tov4 listenport=8080 listenaddress=0.0.0.0 \
+            > /dev/null 2>&1 \
+            && log "WIN: portproxy 8080 removed" \
+            || log "WIN WARNING: portproxy 8080 remove failed"
     fi
 
     # Tinyproxy: tablet LAN media proxy (port 3128, RKN bypass)
@@ -38,7 +57,7 @@ _win_setup() {
         powershell.exe -NonInteractive -File 'C:\Users\volosati\Scripts\tinyproxy_start.ps1' \
             > /dev/null 2>&1 \
             && log "WIN: tinyproxy start OK" \
-            || log "WIN WARNING: tinyproxy start via powershell failed"
+            || log "WIN WARNING: tinyproxy start failed"
     fi
 }
 
