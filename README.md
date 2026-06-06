@@ -202,3 +202,71 @@ Worker читает актуальный tunnel URL из CF KV (`silno_agents / 
 
 **TODO:** заменить поллинг на Server-Sent Events (SSE) или WebSocket — MQTT-события должны пушиться
 в браузер напрямую, без периодических запросов.
+
+
+---
+
+## Ops notes — как должно быть / как не надо
+
+### Stable worktree (8080) должен существовать до запуска start.sh
+
+start.sh ожидает git worktree ../silno-dom-server-stable (привязан к main).
+Если worktree нет — 8080 не стартует, лог пишет WARNING.
+
+  git worktree add ../silno-dom-server-stable main   # создать
+  git worktree list                                  # проверить
+
+Не надо: ждать что start.sh создаст его сам.
+
+---
+
+### httpx + HTTP_PROXY: trust_env=False обязателен для loopback
+
+voloNuk задаёт HTTP_PROXY=http://127.0.0.1:2080 глобально. httpx 0.28+ гонит
+через него все запросы включая loopback 127.0.0.1:8081. Паттерн no_proxy=127.*
+wildcard не работает ни в httpx, ни в curl.
+
+Правильно:
+  def _http_client() -> httpx.AsyncClient:
+      return httpx.AsyncClient(trust_env=False)
+
+Не надо: httpx.AsyncClient() без trust_env=False — 502 + detail:"".
+
+Диагностика: /api/state -> {"error":"upstream_unreachable","detail":""} ->
+проверить trust_env в _http_client().
+
+---
+
+### web.app (8081) — обязательная зависимость panel.app
+
+panel/app.py: catch-all /api/{path} -> 127.0.0.1:8081/{path}.
+Если web.app упал — все /api/* кроме /api/light/state вернут 502.
+
+Порядок старта: web.app (8081) -> panel stable (8080) -> panel dev (8082).
+start.sh соблюдает. При ручном рестарте панели: curl -s localhost:8081/state
+
+---
+
+### git auth на WSL: Windows env vars не наследуются
+
+GITHUB_VOLOSATI_TOKEN и другие Windows User/Machine env не передаются в WSL
+без явного WSLENV.
+
+Правильно (один раз):
+  git config --global credential.helper \
+    '/mnt/c/Program Files/Git/mingw64/bin/git-credential-manager.exe'
+  git config --global core.autocrlf input
+
+Не надо: полагаться на Windows env в WSL git.
+
+---
+
+### CRLF/LF: мнимые изменения на весь репо
+
+core.autocrlf не задан -> git видит 9k изменённых строк где их нет.
+git pull --ff-only падает с "local changes would be overwritten".
+
+Сброс:
+  git config --global core.autocrlf input
+  git checkout -- .
+  git pull --ff-only
