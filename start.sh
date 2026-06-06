@@ -186,6 +186,15 @@ log "done.  logic panel: http://localhost:${LOGIC_PORT:-8084}"
 log "done.  light panel: http://localhost:${WEB_PORT:-8081}"
 log "cf url:  grep 'trycloudflare.com' logs/cf.log"
 
+# Configure git HTTPS auth from env (enables fetch/pull without interactive credential prompts)
+if [ -n "${GITHUB_VOLOSATI_TOKEN:-}" ]; then
+    git remote set-url origin \
+        "https://volosati:${GITHUB_VOLOSATI_TOKEN}@github.com/volosati-team/silno-dom-server.git" \
+        2>/dev/null \
+        && log "git auth: token configured" \
+        || log "git auth: remote set-url failed (non-fatal)"
+fi
+
 # Auto-update: poll GitHub every 5 min, run update.sh when HEAD drifts from origin
 if [ -f "$SCRIPT_DIR/logs/autoupdate.pid" ]; then
     _old=$(cat "$SCRIPT_DIR/logs/autoupdate.pid" 2>/dev/null)

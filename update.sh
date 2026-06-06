@@ -14,6 +14,13 @@ sleep 2
 # Load env
 [ -f "$SCRIPT_DIR/.env" ] && set -a && source "$SCRIPT_DIR/.env" && set +a
 
+# Configure git HTTPS auth from env (needed on voloNuk where git config has no stored credentials)
+if [ -n "${GITHUB_VOLOSATI_TOKEN:-}" ]; then
+    git remote set-url origin \
+        "https://volosati:${GITHUB_VOLOSATI_TOKEN}@github.com/volosati-team/silno-dom-server.git" \
+        2>/dev/null || true
+fi
+
 # Pull latest in dev directory
 git pull --ff-only && echo "[$(date '+%H:%M:%S')] git pull OK" || echo "[$(date '+%H:%M:%S')] git pull FAILED"
 
