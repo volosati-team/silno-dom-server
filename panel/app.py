@@ -1060,7 +1060,7 @@ BT_AGENT_URL = "http://127.0.0.1:8765"
 
 
 def _http_client() -> httpx.AsyncClient:
-    return httpx.AsyncClient()
+    return httpx.AsyncClient(trust_env=False)
 
 
 @app.post("/api/bt/toggle", include_in_schema=False)
