@@ -1052,7 +1052,10 @@ function barSetSC() {
   art.classList.remove('yt-icon');
   art.style.background = '';
   art.alt = '';
-  if (scWidget) scWidget.getCurrentSound(scUpdateTrackInfo);
+  if (scWidget) {
+    try { scWidget.getCurrentSound(scUpdateTrackInfo); }
+    catch(e) { console.warn('SC getCurrentSound threw:', e && e.message); }
+  }
 }
 function barSetSP() {
   activePlayer = 2;
@@ -1737,30 +1740,28 @@ var NATIVE_UNLOCK_WAV = 'data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQ
 var nativeUnlocked = false;
 
 function nativePrimeForGesture() {
-  if (nativeUnlocked) return;
   var audio = ensureNativeAudio();
-  // Muted + zero-volume so the silent WAV never competes for Android audio
-  // focus with the iframe widgets. The point is *only* to consume the
-  // user-gesture token inside a real audio.play() call — once Chromium has
-  // registered that, subsequent iframe .play() calls inherit the unlocked
-  // state on the page session.
+  // The WAV is silence, but it must be audible to the browser policy: Android
+  // WebView does not let a later real stream inherit a muted autoplay grant.
   try {
-    audio.muted = true;
-    audio.volume = 0;
+    audio.muted = false;
+    audio.volume = 1;
     audio.src = NATIVE_UNLOCK_WAV;
     audio.loop = true;
     var p = audio.play();
     if (p && typeof p.then === 'function') {
       p.then(function() {
         nativeUnlocked = true;
-        console.log('native: unlocked (muted-only)');
+        console.log('native: unlocked (audible-silent)');
       }).catch(function(e) {
+        nativeUnlocked = false;
         console.warn('native: unlock play rejected:', e && e.message);
       });
     } else {
       nativeUnlocked = true;
     }
   } catch(e) {
+    nativeUnlocked = false;
     console.warn('native: unlock threw:', e && e.message);
   }
 }
