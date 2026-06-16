@@ -689,13 +689,9 @@ async function scLoadInWidget(url, autoplay = true) {
     };
     try { scWidget.bind(SC.Widget.Events.LOAD_PROGRESS, lpHandler); } catch(_) {}
     setTimeout(function(){ forcePlay('timeout-2500ms'); }, 2500);
-    // Native-stream fallback: if SC Widget is still silent 5.5s after forcePlay,
-    // stream directly via yt-dlp. nativePrimeForGesture() already armed the
-    // audio element with a muted loop, so play() succeeds without a fresh gesture.
     setTimeout(function() {
       if (!scIsPlaying) {
-        console.warn('scLoadInWidget: SC Widget silent after 5.5s — native stream fallback');
-        nativeReresolveAndPlay({ url: url, service: 'soundcloud' }, false, false);
+        console.warn('scLoadInWidget: SC Widget still silent after 5.5s');
       }
     }, 5500);
     scWidget.load(url, { auto_play: true, show_comments: false, show_reposts: false, show_teaser: false }, function() {
@@ -738,7 +734,7 @@ async function scLoadInWidget(url, autoplay = true) {
 
 // ── Universal player controls ──────────────────────────────────────────────
 let activePlayer = 1; // 0=YT, 1=SC, 2=SP
-let ytPlaying = false, ytDuration = 0;
+let ytPlaying = false, ytDuration = 0, ytStarted = false;
 var ytAutoNextTimer = null;
 function ytAutoNext() {
   if (ytAutoNextTimer) return;
@@ -799,26 +795,50 @@ function ytCmd(func, args) {
   } catch {}
 }
 
-// YT IFrame API handshake. Without this the iframe never sends state
-// events (onStateChange, infoDelivery) and our bar play/pause buttons
-// can't reflect actual playback state. Fires on every yt-frame src
-// change so it covers playlist switches too.
+function ytEmbedParams(extra) {
+  var params = Object.assign({
+    autoplay: '1',
+    enablejsapi: '1',
+    playsinline: '1',
+    origin: location.origin,
+    widget_referrer: location.href.split('#')[0],
+  }, extra || {});
+  return Object.keys(params)
+    .filter(function(k) { return params[k] !== null && typeof params[k] !== 'undefined' && params[k] !== ''; })
+    .map(function(k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); })
+    .join('&');
+}
+
+function ytEmbedUrl(kind, id, extra) {
+  var base = kind === 'playlist'
+    ? 'https://www.youtube-nocookie.com/embed/videoseries'
+    : 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(id);
+  var params = kind === 'playlist'
+    ? Object.assign({ list: id }, extra || {})
+    : (extra || {});
+  return base + '?' + ytEmbedParams(params);
+}
+
+function ytSendListening() {
+  var f = document.getElementById('yt-frame');
+  if (!f || !f.contentWindow) return;
+  try {
+    f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
+    f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: '1', channel: 'widget' }), '*');
+    f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: '' }), '*');
+    console.log('YT listening handshake sent (numeric + string + playVideo)');
+  } catch (e) { console.warn('YT listening send threw:', e && e.message); }
+}
+
 (function () {
   function ready(cb){ if (document.readyState !== 'loading') cb(); else document.addEventListener('DOMContentLoaded', cb); }
   ready(function () {
     var f = document.getElementById('yt-frame');
     if (!f) return;
     f.addEventListener('load', function () {
-      try {
-        // YT iframe API expects a numeric id for the listening handshake.
-        // Send both variants — some embed builds accept string, some only
-        // numeric. Cost is one extra postMessage.
-        f.contentWindow.postMessage(
-          JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
-        f.contentWindow.postMessage(
-          JSON.stringify({ event: 'listening', id: '1', channel: 'widget' }), '*');
-        console.log('YT listening handshake sent (numeric + string)');
-      } catch (e) { console.warn('YT listening send threw:', e && e.message); }
+      ytSendListening();
+      setTimeout(ytSendListening, 800);
+      setTimeout(ytSendListening, 2000);
     });
   });
 })();
@@ -1102,9 +1122,13 @@ window.addEventListener('message', e => {
     const d = JSON.parse(typeof e.data === 'string' ? e.data : '{}');
     if (d.event === 'onStateChange') {
       ytPlaying = d.info === 1;
+      if (d.info === 1) ytStarted = true;
       setBarPlayPauseIcon(ytPlaying);
       if (d.info === 1) ytCancelWatchdog();  // playing — cancel watchdog
-      if (d.info === 0) ytAutoNext();         // ended → next in panel playlist
+      if (d.info === 0) {
+        if (ytStarted) ytAutoNext();
+        else ytShowError();
+      }
     }
     if (d.event === 'onError') {
       // Embed-restricted (101/150), removed/private (100), or other — show overlay + skip
@@ -1117,12 +1141,16 @@ window.addEventListener('message', e => {
       // -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued.
       if (typeof d.info.playerState !== 'undefined') {
         var playing = d.info.playerState === 1;
+        if (playing) ytStarted = true;
         if (playing !== ytPlaying) {
           ytPlaying = playing;
           setBarPlayPauseIcon(ytPlaying);
         }
         if (d.info.playerState === 1) ytCancelWatchdog();  // playing
-        if (d.info.playerState === 0) ytAutoNext();         // ended via infoDelivery
+        if (d.info.playerState === 0) {
+          if (ytStarted) ytAutoNext();
+          else ytShowError();
+        }
       }
       // YT sends title in videoData sub-object
       if (d.info.videoData) ytApplyVideoData(d.info.videoData);
@@ -1361,6 +1389,7 @@ async function addToSaved(url, overrideTitle) {
   savedList.unshift({ id: Date.now(), url, service, title: title, thumbnail: meta.thumbnail });
   savedSave();
   renderSavedList();
+  nativePrewarmSavedList();
   loadSavedItem(savedList[0]);
 }
 
@@ -1534,6 +1563,9 @@ document.addEventListener('mouseup', dragEnd);
 let nativeAudio = null;
 let nativeCurrent = null;     // { url, item, resolved_at, expires_at }
 let nativeReresolveTimer = null;
+let nativeResolveCache = {};
+let nativeResolvePollTimer = null;
+let nativePlaybackEnabled = false;
 
 var ICON_PLAY  = '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 var ICON_PAUSE = '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
@@ -1589,8 +1621,7 @@ function ensureNativeAudio() {
       return;
     }
     nativeCurrent._errRetryAt = now;
-    // Re-resolve src but respect pause state — never autoplay on error.
-    nativeReresolveAndPlay(nativeCurrent.item, true, true);
+    nativePlayCached(nativeCurrent.item);
   });
   nativeAudio.addEventListener('ended', function() {
     console.log('native: ended');
@@ -1624,6 +1655,132 @@ function nativeStop() {
   setBarPlayPauseIcon(false);
 }
 
+function nativeCacheKey(item) {
+  return item && item.url ? item.url : '';
+}
+
+function nativeCachedResolve(item) {
+  var key = nativeCacheKey(item);
+  var hit = key ? nativeResolveCache[key] : null;
+  if (!hit || !hit.stream_url) return null;
+  var exp = hit.expires_at ? hit.expires_at * 1000 : 0;
+  if (exp && exp - Date.now() < 30000) {
+    delete nativeResolveCache[key];
+    return null;
+  }
+  return hit;
+}
+
+function nativeApplyResolvedStream(item, d, respectPauseState) {
+  if (!d || !d.stream_url) {
+    console.warn('native: resolve no stream_url', d && d.error);
+    return false;
+  }
+  console.log('native: resolve ok', d.title || item.url, d.is_playlist ? ('(playlist ' + (d.items ? d.items.length : 0) + ' items)') : '');
+  pauseYT();
+  if (scWidget) { try { scWidget.pause(); } catch(_) {} }
+  scIsPlaying = false;
+  var audio = ensureNativeAudio();
+  var wasPaused = audio.paused;
+  var prevTime = audio.currentTime;
+  audio.loop = false;
+  audio.src = d.stream_url;
+  activePlayer = 3;
+  nativeCurrent = {
+    url: item.url,
+    item: item,
+    resolved_at: Date.now(),
+    expires_at: d.expires_at ? d.expires_at * 1000 : (Date.now() + 240 * 1000),
+    playlist_items: (d.is_playlist && Array.isArray(d.items)) ? d.items : null,
+    playlist_idx: 0,
+  };
+  if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
+  if (d.thumbnail) {
+    var art = document.getElementById('sc-art');
+    if (art) {
+      var dt = d.thumbnail;
+      var itemThumb = item && item.thumbnail;
+      var keepItemThumb = itemThumb && /\.jpg(\?|$)/i.test(itemThumb) && /\.webp(\?|$)/i.test(dt);
+      if (!keepItemThumb) {
+        art.classList.remove('yt-icon');
+        art.style.background = '';
+        art.src = dt;
+        art.onerror = function() {
+          this.onerror = null;
+          if (item && item.url) {
+            var vm = item.url.match(/[?&]v=([^&#]+)/) || item.url.match(/youtu\.be\/([^?&#]+)/);
+            if (vm) { this.src = 'https://i.ytimg.com/vi/' + vm[1] + '/hqdefault.jpg'; return; }
+          }
+          this.src = '';
+          this.classList.add('yt-icon');
+        };
+      }
+    }
+  }
+  if (respectPauseState && wasPaused) {
+    console.log('native: re-resolve skipped autoplay — user paused');
+    if (prevTime > 0) {
+      var restorePos = function() { try { audio.currentTime = prevTime; } catch(_) {} audio.removeEventListener('loadedmetadata', restorePos); };
+      audio.addEventListener('loadedmetadata', restorePos);
+    }
+  } else {
+    try {
+      var p = audio.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(function(e) { console.warn('native: play() rejected:', e && e.message); });
+      }
+    } catch(e) {
+      console.warn('native: play() threw:', e);
+    }
+  }
+  if (nativeReresolveTimer) { clearTimeout(nativeReresolveTimer); nativeReresolveTimer = null; }
+  return true;
+}
+
+function nativePlayCached(item) {
+  if (!nativePlaybackEnabled) return false;
+  var d = nativeCachedResolve(item);
+  if (!d) {
+    console.warn('native: cached resolve missing');
+    return false;
+  }
+  return nativeApplyResolvedStream(item, d, false);
+}
+
+function nativePrewarmSavedList() {
+  var urls = [];
+  for (var i = 0; i < savedList.length; i++) {
+    var item = savedList[i];
+    if (item && item.service === 'soundcloud' && item.url) urls.push(item.url);
+  }
+  if (!urls.length) return;
+  fetch('/api/stream/prewarm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ urls: urls.slice(0, 12) })
+  }).catch(function(e) { console.warn('native: prewarm failed:', e && e.message); });
+  nativePollResolveReady(urls.slice(0, 12));
+}
+
+function nativePollResolveReady(urls) {
+  if (nativeResolvePollTimer) clearTimeout(nativeResolvePollTimer);
+  var pending = urls.slice();
+  function tick() {
+    if (!pending.length) return;
+    var next = [];
+    Promise.all(pending.map(function(url) {
+      return fetch('/api/stream/ready?url=' + encodeURIComponent(url)).then(function(r) { return r.json(); }).then(function(d) {
+        if (d && d.ready && d.payload && d.payload.stream_url) nativeResolveCache[url] = d.payload;
+        else if (d && d.pending) next.push(url);
+      }).catch(function() { next.push(url); });
+    })).then(function() {
+      pending = next;
+      if (pending.length) nativeResolvePollTimer = setTimeout(tick, 1500);
+    });
+  }
+  tick();
+}
+
 async function nativeReresolveAndPlay(item, isRetry, respectPauseState) {
   try {
     var r = await fetch('/api/stream/resolve?url=' + encodeURIComponent(item.url));
@@ -1632,87 +1789,8 @@ async function nativeReresolveAndPlay(item, isRetry, respectPauseState) {
       return false;
     }
     var d = await r.json();
-    if (!d || !d.stream_url) {
-      console.warn('native: resolve no stream_url', d && d.error);
-      return false;
-    }
-    console.log('native: resolve ok', d.title || item.url, d.is_playlist ? ('(playlist ' + (d.items ? d.items.length : 0) + ' items)') : '');
-    var audio = ensureNativeAudio();
-    // Capture pause state BEFORE src swap so pre-emptive re-resolve does not
-    // unpause a track the user explicitly paused.
-    var wasPaused = audio.paused;
-    var prevTime = audio.currentTime;
-    // Turn off the unlock loop before swapping to the real stream URL,
-    // otherwise the track would loop forever at end.
-    audio.loop = false;
-    audio.src = d.stream_url;
-    activePlayer = 3;
-    nativeCurrent = {
-      url: item.url,
-      item: item,
-      resolved_at: Date.now(),
-      expires_at: d.expires_at ? d.expires_at * 1000 : (Date.now() + 240 * 1000),
-      // Playlist navigation: when streaming returns is_playlist + items,
-      // keep the items array and current index so scPrev/scNext can walk
-      // tracks INSIDE the playlist, not just jump between saved-list entries.
-      playlist_items: (d.is_playlist && Array.isArray(d.items)) ? d.items : null,
-      playlist_idx: 0,
-    };
-    if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
-    if (d.thumbnail) {
-      var art = document.getElementById('sc-art');
-      if (art) {
-        // Prefer JPG over WEBP — Bromite v108 sometimes fails on i.ytimg.com webp.
-        // If the saved-list item already gave us a JPG thumbnail, keep that.
-        var dt = d.thumbnail;
-        var itemThumb = item && item.thumbnail;
-        var keepItemThumb = itemThumb && /\.jpg(\?|$)/i.test(itemThumb) && /\.webp(\?|$)/i.test(dt);
-        if (!keepItemThumb) {
-          art.classList.remove('yt-icon');
-          art.style.background = '';
-          art.src = dt;
-          art.onerror = function() {
-            // Last-ditch: if webp/jpg fails, fall back to vi/{id}/mqdefault.jpg
-            this.onerror = null;
-            if (item && item.url) {
-              var vm = item.url.match(/[?&]v=([^&#]+)/) || item.url.match(/youtu\.be\/([^?&#]+)/);
-              if (vm) { this.src = 'https://i.ytimg.com/vi/' + vm[1] + '/hqdefault.jpg'; return; }
-            }
-            this.src = '';
-            this.classList.add('yt-icon');
-          };
-        }
-      }
-    }
-    if (respectPauseState && wasPaused) {
-      console.log('native: re-resolve skipped autoplay — user paused');
-      // Restore position if we have a non-zero prevTime, since src swap reset it.
-      if (prevTime > 0) {
-        var restorePos = function() { try { audio.currentTime = prevTime; } catch(_) {} audio.removeEventListener('loadedmetadata', restorePos); };
-        audio.addEventListener('loadedmetadata', restorePos);
-      }
-    } else {
-      try {
-        // Must be called synchronously in the click-gesture chain on first hit.
-        var p = audio.play();
-        if (p && typeof p.catch === 'function') {
-          p.catch(function(e) { console.warn('native: play() rejected:', e && e.message); });
-        }
-      } catch(e) {
-        console.warn('native: play() threw:', e);
-      }
-    }
-    // Schedule a pre-emptive re-resolve ~30s before expiry. Pass
-    // respectPauseState=true so the timer does NOT unpause user-paused tracks.
-    if (nativeReresolveTimer) clearTimeout(nativeReresolveTimer);
-    var leadMs = Math.max(30 * 1000, (nativeCurrent.expires_at - Date.now()) - 30 * 1000);
-    nativeReresolveTimer = setTimeout(function() {
-      if (nativeCurrent && nativeCurrent.item === item) {
-        console.log('native: pre-emptive re-resolve');
-        nativeReresolveAndPlay(item, false, true);
-      }
-    }, leadMs);
-    return true;
+    nativeResolveCache[item.url] = d;
+    return nativeApplyResolvedStream(item, d, respectPauseState);
   } catch(e) {
     console.warn('native: resolve threw:', e && e.message);
     return false;
@@ -1741,6 +1819,7 @@ var NATIVE_UNLOCK_WAV = 'data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQ
 var nativeUnlocked = false;
 
 function nativePrimeForGesture() {
+  if (!nativePlaybackEnabled) return;
   var audio = ensureNativeAudio();
   // The WAV is silence, but it must be audible to the browser policy: Android
   // WebView does not let a later real stream inherit a muted autoplay grant.
@@ -1841,6 +1920,7 @@ function loadSavedItemIframe(item) {
   ytHideError();
   if (item.service === 'youtube') {
     setMediaTab(0);
+    ytStarted = false;
     // Immediately populate bar from saved item data
     if (item.title) document.getElementById('sc-track-title').textContent = cleanTitle(item.title);
     const m1 = item.url.match(/youtu\.be\/([^?&#]+)/);
@@ -1858,13 +1938,13 @@ function loadSavedItemIframe(item) {
     // No YouTube Mix (?list=RD{vid}) — when track ends, panel handles next
     // via ytAutoNext(). Mix caused silent failures: YouTube would auto-load
     // an unavailable video inside the iframe without firing onError.
-    if (m3) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/videoseries?list=' + m3[1] + '&autoplay=1&enablejsapi=1';
-    else if (m1) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m1[1] + '?autoplay=1&enablejsapi=1';
-    else if (m2) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m2[1] + '?autoplay=1&enablejsapi=1';
+    if (m3) document.getElementById('yt-frame').src = ytEmbedUrl('playlist', m3[1]);
+    else if (m1) document.getElementById('yt-frame').src = ytEmbedUrl('video', m1[1]);
+    else if (m2) document.getElementById('yt-frame').src = ytEmbedUrl('video', m2[1]);
     ytStartWatchdog();
   } else if (item.service === 'soundcloud') {
     setMediaTab(1);
-    scLoadInWidget(item.url);
+    if (!nativePlayCached(item)) scLoadInWidget(item.url);
   } else if (item.service === 'spotify') {
     setMediaTab(2);
     const embedUrl = item.url.replace('open.spotify.com/', 'open.spotify.com/embed/');
@@ -1919,26 +1999,22 @@ document.getElementById('saved-add-input').addEventListener('keydown', e => {
 let guestPollInterval = null;
 
 async function showGuestQR() {
-  try {
-    const r = await fetch('/api/guest-session', { method: 'POST' });
-    const d = await r.json();
-    const sid = d.session_id;
-    const guestUrl = location.origin + '/guest?s=' + sid;
-    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(guestUrl);
-    document.getElementById('guest-qr-img').src = qrUrl;
-    document.getElementById('guest-qr-modal').classList.add('show');
-    guestPollInterval = setInterval(async () => {
-      try {
-        const pr = await fetch('/api/guest-poll?session=' + sid);
-        const pd = await pr.json();
-        if (pd && pd.url) {
-          clearInterval(guestPollInterval); guestPollInterval = null;
-          hideGuestQR();
-          await addToSaved(pd.url, pd.title);
-        }
-      } catch {}
-    }, 2000);
-  } catch(e) {}
+  const sid = 'stable';
+  const guestUrl = location.origin + '/guest';
+  const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(guestUrl);
+  document.getElementById('guest-qr-img').src = qrUrl;
+  document.getElementById('guest-qr-modal').classList.add('show');
+  guestPollInterval = setInterval(async () => {
+    try {
+      const pr = await fetch('/api/guest-poll?session=' + sid);
+      const pd = await pr.json();
+      if (pd && pd.url) {
+        clearInterval(guestPollInterval); guestPollInterval = null;
+        hideGuestQR();
+        await addToSaved(pd.url, pd.title);
+      }
+    } catch {}
+  }, 2000);
 }
 
 function hideGuestQR() {
@@ -2081,10 +2157,15 @@ function probeEmbeddable(vid, cardEl) {
     if (!e.origin || !/youtube(-nocookie)?\.com$/.test(new URL(e.origin).hostname)) return;
     try {
       var d = JSON.parse(e.data);
+      var ps = null;
+      if (d.event === 'onStateChange') ps = d.info;
+      else if (d.event === 'infoDelivery' && d.info && typeof d.info.playerState !== 'undefined') ps = d.info.playerState;
       if (d.event === 'onError') {
         finish(false, 'onError-' + d.info);
-      } else if (d.event === 'onStateChange' || (d.event === 'infoDelivery' && d.info && typeof d.info.playerState !== 'undefined')) {
-        finish(true, 'ok');
+      } else if (ps === 1 || ps === 3 || ps === 5) {
+        finish(true, 'playerState-' + ps);
+      } else if (ps === 0) {
+        finish(false, 'ended-before-play');
       } else if (d.event === 'initialDelivery' && d.info && d.info.videoData && d.info.videoData.errorCode) {
         finish(false, 'errorCode-' + d.info.videoData.errorCode);
       }
@@ -2287,10 +2368,12 @@ function radioProbeBatch(items) {
         if (!e.origin || !/youtube(-nocookie)?\.com$/.test(new URL(e.origin).hostname)) return;
         try {
           var d2 = JSON.parse(e.data);
+          var ps = null;
+          if (d2.event === 'onStateChange') ps = d2.info;
+          else if (d2.event === 'infoDelivery' && d2.info && typeof d2.info.playerState !== 'undefined') ps = d2.info.playerState;
           if (d2.event === 'onError') finish(false, 'onError-' + d2.info);
-          else if (d2.event === 'onStateChange'
-            || (d2.event === 'infoDelivery' && d2.info && typeof d2.info.playerState !== 'undefined'))
-            finish(true, 'ok');
+          else if (ps === 1 || ps === 3 || ps === 5) finish(true, 'playerState-' + ps);
+          else if (ps === 0) finish(false, 'ended-before-play');
           else if (d2.event === 'initialDelivery' && d2.info && d2.info.videoData && d2.info.videoData.errorCode)
             finish(false, 'errorCode-' + d2.info.videoData.errorCode);
         } catch (_) {}
@@ -2398,7 +2481,7 @@ scApplyActiveAccount();
 scUpdateAccountsMenu();
 
 // Saved playlists init
-(async () => { await savedLoad(); renderSavedList(); savedRefreshThumbnails(); restorePlaybackState(); })();
+(async () => { await savedLoad(); renderSavedList(); nativePrewarmSavedList(); savedRefreshThumbnails(); restorePlaybackState(); })();
 
 // Background thumbnail refresh for items saved before thumbnail support
 async function savedRefreshThumbnails() {
@@ -2473,8 +2556,8 @@ function restorePlaybackState() {
     var m3 = url.match(/[?&]list=([^&#]+)/);
     var vid = m1 ? m1[1] : (m2 ? m2[1] : null);
     var src = '';
-    if (m3) src = 'https://www.youtube-nocookie.com/embed/videoseries?list=' + m3[1] + '&autoplay=1&enablejsapi=1';
-    else if (vid) src = 'https://www.youtube-nocookie.com/embed/' + vid + '?autoplay=1&enablejsapi=1' + (startSec > 5 ? '&start=' + startSec : '');
+    if (m3) src = ytEmbedUrl('playlist', m3[1]);
+    else if (vid) src = ytEmbedUrl('video', vid, { start: startSec > 5 ? startSec : null });
     if (src) document.getElementById('yt-frame').src = src;
   } else if (item.service === 'soundcloud') {
     setMediaTab(1);
