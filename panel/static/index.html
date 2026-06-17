@@ -222,8 +222,11 @@
       <div id="media-track-wrap">
       <div id="media-track">
         <div class="mslide" id="yt-slide">
+          <div id="yt-thumb-poster" aria-hidden="true"><img id="yt-thumb-img" alt=""></div>
+          <video id="yt-video" playsinline webkit-playsinline muted autoplay preload="auto"></video>
           <iframe id="yt-frame" src="about:blank"
             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            referrerpolicy="origin"
             allowfullscreen></iframe>
           <div id="yt-error-overlay">
             <div id="yt-error-banner">
@@ -244,6 +247,14 @@
           <div id="sc-likes-list"></div>
           <div id="sc-frame-wrap">
             <iframe id="sc-frame" src="about:blank" allow="autoplay"></iframe>
+            <div id="sc-native-visual" aria-hidden="true">
+              <div id="sc-native-art-wrap"><img id="sc-native-art" alt=""></div>
+              <div id="sc-native-meta">
+                <div id="sc-native-title">SoundCloud</div>
+                <div id="sc-native-sub">native stream</div>
+              </div>
+              <div id="sc-native-bars"><span></span><span></span><span></span><span></span><span></span></div>
+            </div>
             <div id="sc-placeholder">
               <div id="sc-ph-icon">☁</div>
               <div>Вставь ссылку SC или подключи аккаунт</div>
@@ -403,10 +414,6 @@
   </div>
   <div id="menu-logged">
     <div class="menu-user" id="menu-uname"></div>
-    <a class="mlink" href="/accounts" target="_blank" rel="noopener">Аккаунты</a>
-    <a class="mlink" href="/automation" target="_blank" rel="noopener">Автоматика</a>
-    <a class="mlink" href="/log" target="_blank" rel="noopener">Лог</a>
-    <a class="mlink" href="/system" target="_blank" rel="noopener">Система</a>
     <a class="mlink" href="/admin">Настройки →</a>
     <label class="mlink menu-toggle" id="menu-console-toggle">
       <span>Консоль</span>
@@ -423,6 +430,35 @@
     if (location.search.indexOf('debug=1') !== -1) localStorage.setItem('eruda_on', '1');
     if (location.search.indexOf('debug=0') !== -1) localStorage.removeItem('eruda_on');
     if (localStorage.getItem('eruda_on')) {
+      var rows = [];
+      var panel = document.createElement('div');
+      panel.style.cssText = 'position:fixed;left:8px;right:8px;bottom:8px;max-height:32vh;overflow:auto;z-index:2147483646;background:rgba(0,0,0,.88);border:1px solid #fff500;border-radius:8px;color:#fff;font:11px/1.35 monospace;padding:30px 8px 8px;white-space:pre-wrap;word-break:break-word;-webkit-user-select:text;user-select:text;touch-action:auto;';
+      var copy = document.createElement('button');
+      copy.textContent = 'Copy console';
+      copy.style.cssText = 'position:absolute;left:8px;top:6px;background:#fff500;color:#000;border:0;border-radius:5px;font:11px sans-serif;padding:4px 8px;';
+      panel.appendChild(copy);
+      document.body.appendChild(panel);
+      function esc(s) { return String(s).replace(/[&<>]/g, function(c) { return c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'; }); }
+      function linkify(s) { return esc(s).replace(/https?:\/\/[^\s"'<>]+/g, function(u) { return '<a style="color:#8fd8ff;text-decoration:underline" target="_blank" rel="noopener" href="' + u + '">' + u + '</a>'; }); }
+      function add(type, args) {
+        var line = '[' + type + '] ' + Array.prototype.slice.call(args).map(function(v) { return typeof v === 'string' ? v : JSON.stringify(v); }).join(' ');
+        rows.push(line); if (rows.length > 300) rows.shift();
+        var el = document.createElement('div');
+        el.innerHTML = linkify(line);
+        panel.appendChild(el);
+        panel.scrollTop = panel.scrollHeight;
+      }
+      copy.onclick = function() {
+        var text = rows.join('\n');
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).catch(function(){});
+        else { var t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); }
+      };
+      ['log','warn','error'].forEach(function(type) {
+        var orig = console[type];
+        console[type] = function() { try { add(type, arguments); } catch(e) {} return orig.apply(console, arguments); };
+      });
+      window.addEventListener('error', function(e) { add('error', [e.message || '', e.filename || '', e.lineno || '']); });
+      window.addEventListener('unhandledrejection', function(e) { add('rejection', [e.reason && e.reason.stack ? e.reason.stack : e.reason]); });
       var s = document.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/eruda';
       s.onload = function() { eruda.init(); };

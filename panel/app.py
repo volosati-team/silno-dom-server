@@ -17,6 +17,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -42,7 +43,9 @@ from fastapi.responses import (
     PlainTextResponse,
     RedirectResponse,
     Response,
+    StreamingResponse,
 )
+from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 
 
@@ -54,6 +57,7 @@ BASE_DIR = Path(__file__).resolve().parent
 STATIC_DIR = BASE_DIR / "static"
 DATA_DIR = BASE_DIR / "data"
 DB_PATH = DATA_DIR / "panel.db"
+SEED_SAVED = DATA_DIR / "seed_saved_playlists.json"
 
 CORS_HEADERS = {"Access-Control-Allow-Origin": "*"}
 
@@ -632,7 +636,14 @@ async def api_sc_token(request: Request):
 @app.get("/api/saved-list")
 async def api_saved_list_get():
     raw = kv_get("saved_playlists")
-    return text_response(raw if raw is not None else "[]")
+    if raw is not None:
+        return text_response(raw)
+    # On fresh installs with empty KV, seed from the shared base playlist
+    if SEED_SAVED.exists():
+        seed = SEED_SAVED.read_text(encoding="utf-8")
+        kv_put("saved_playlists", seed)
+        return text_response(seed)
+    return text_response("[]")
 
 
 @app.put("/api/saved-list")
@@ -708,16 +719,52 @@ async def api_dbg_log_recent():
 
 @app.get("/api/build", include_in_schema=False)
 async def api_build():
+    files = [
+        STATIC_DIR / "index.html",
+        STATIC_DIR / "app.js",
+        STATIC_DIR / "app.css",
+        STATIC_DIR / "admin.html",
+    ]
+    latest = max((path.stat().st_mtime for path in files if path.exists()), default=0)
+    version_date = ""
+    if latest:
+        version_date = datetime.fromtimestamp(latest, timezone.utc).astimezone().isoformat(timespec="seconds")
+    return json_response({"version_date": version_date})
+@app.post("/api/update", include_in_schema=False)
+async def api_update(request: Request):
+    """Trigger git pull + restart uvicorn (via touch of app.py for --reload)."""
     import subprocess
     try:
-        out = subprocess.check_output(
-            ["git", "log", "-1", "--format=%h %cI"],
-            cwd=str(BASE_DIR), text=True, timeout=3
-        ).strip()
-        parts = out.split(" ", 1)
-        return json_response({"commit": parts[0], "date": parts[1] if len(parts) > 1 else ""})
+        body = await request.json()
     except Exception:
-        return json_response({"commit": "unknown", "date": ""})
+        body = {}
+    token = (body.get("token") or "").strip()
+    if not token:
+        return json_response({"ok": False, "error": "token required"}, status=400)
+
+    # Set remote with token and pull current branch
+    branch = body.get("branch") or "main"
+    remote_url = f"https://{token}@github.com/volosati-team/silno-dom-server.git"
+    try:
+        subprocess.run(
+            ["git", "remote", "set-url", "origin", remote_url],
+            cwd=str(BASE_DIR), check=True, timeout=10,
+            capture_output=True, text=True,
+        )
+        result = subprocess.run(
+            ["git", "pull", "origin", branch],
+            cwd=str(BASE_DIR), timeout=30,
+            capture_output=True, text=True,
+        )
+        # Touch app.py so uvicorn --reload picks up changes
+        (BASE_DIR / "app.py").touch()
+        return json_response({
+            "ok": result.returncode == 0,
+            "stdout": result.stdout[-300:],
+            "stderr": result.stderr[-300:],
+        })
+    except Exception as e:
+        return json_response({"ok": False, "error": str(e)[:200]}, status=500)
 
 
 @app.get("/api/version", include_in_schema=False)
@@ -967,6 +1014,38 @@ async def api_light_state():
 
 STREAMING_BACKEND = "http://127.0.0.1:8083"
 
+YOUTUBE_THUMB_HOSTS = {"img.youtube.com", "i.ytimg.com"}
+
+
+@app.get("/api/thumb", include_in_schema=False)
+async def api_thumb(url: str):
+    try:
+        parsed = httpx.URL(url)
+    except Exception:
+        raise HTTPException(status_code=400, detail="bad_url")
+    if parsed.scheme not in ("http", "https") or parsed.host not in YOUTUBE_THUMB_HOSTS:
+        raise HTTPException(status_code=400, detail="unsupported_thumb_host")
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            r = await client.get(str(parsed), headers={"User-Agent": "Mozilla/5.0"})
+    except Exception as exc:
+        return JSONResponse({"error": "thumb_fetch_failed", "detail": str(exc)[:200]}, status_code=502)
+    if r.status_code != 200:
+        return JSONResponse({"error": "thumb_http", "status": r.status_code}, status_code=502)
+    content_type = r.headers.get("content-type", "")
+    if not content_type.startswith("image/"):
+        return JSONResponse({"error": "thumb_not_image", "content_type": content_type[:80]}, status_code=502)
+    headers = {
+        "Cache-Control": "public, max-age=86400",
+        "Access-Control-Allow-Origin": "*",
+    }
+    return Response(content=r.content, media_type=content_type, headers=headers)
+
+
+async def _close_backend_response(response: httpx.Response, client: httpx.AsyncClient) -> None:
+    await response.aclose()
+    await client.aclose()
+
 
 @app.api_route(
     "/api/stream/{path:path}",
@@ -984,25 +1063,26 @@ async def fallthrough_streaming_proxy(path: str, request: Request):
         if k.lower() not in ("host", "content-length")
     }
     body = await request.body()
+    client = httpx.AsyncClient(timeout=None, trust_env=False)
     try:
-        # trust_env=False so httpx does not route loopback calls through the
-        # host's HTTP_PROXY=http://127.0.0.1:2080 (Throne VPN). NO_PROXY for
-        # IP literals is unreliable across httpx versions; bypassing the env
-        # entirely is the safe call for in-host proxying.
-        async with httpx.AsyncClient(timeout=35.0, trust_env=False) as client:
-            r = await client.request(request.method, target, headers=headers, content=body)
+        # trust_env=False so loopback forwarding never goes through the host's
+        # HTTP proxy; the streaming backend itself handles external/VPN egress.
+        req = client.build_request(request.method, target, headers=headers, content=body)
+        r = await client.send(req, stream=True)
     except Exception as exc:
+        await client.aclose()
         return JSONResponse({"error": "streaming_unreachable", "detail": str(exc)}, status_code=502)
     resp_headers = {
         k: v
         for k, v in r.headers.items()
-        if k.lower() not in ("content-length", "transfer-encoding", "connection")
+        if k.lower() not in ("transfer-encoding", "connection")
     }
-    return Response(
-        content=r.content,
+    return StreamingResponse(
+        r.aiter_bytes(),
         status_code=r.status_code,
         headers=resp_headers,
         media_type=r.headers.get("content-type"),
+        background=BackgroundTask(_close_backend_response, r, client),
     )
 
 
@@ -1014,7 +1094,7 @@ BT_AGENT_URL = "http://127.0.0.1:8765"
 
 
 def _http_client() -> httpx.AsyncClient:
-    return httpx.AsyncClient()
+    return httpx.AsyncClient(trust_env=False)
 
 
 @app.post("/api/bt/toggle", include_in_schema=False)
@@ -1062,6 +1142,82 @@ async def api_display_settings_put(request: Request):
 async def admin_page():
     path = STATIC_DIR / "admin.html"
     return FileResponse(str(path), media_type="text/html")
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+# Passwords stored in .env as PANEL_PASS_<USERNAME> (plain text for now;
+# migrate to hashes when moving to a new server).
+
+_PROD_USERS = ["volosati", "max"]
+_PANEL_ENV = BASE_DIR / ".env"
+
+
+def _is_dev_branch() -> bool:
+    try:
+        branch = subprocess.check_output(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=str(BASE_DIR), text=True, timeout=2
+        ).strip()
+        return branch != "main"
+    except Exception:
+        return False
+
+
+def _allowed_users() -> list:
+    users = list(_PROD_USERS)
+    if _is_dev_branch():
+        users = [""] + users  # empty = quick-login dev user
+    return users
+
+
+def _get_pass(username: str) -> str:
+    return os.environ.get(f"PANEL_PASS_{username.upper()}", "")
+
+
+def _set_pass(username: str, new_pass: str) -> None:
+    key = f"PANEL_PASS_{username.upper()}"
+    os.environ[key] = new_pass  # immediate effect
+    lines = _PANEL_ENV.read_text().splitlines() if _PANEL_ENV.exists() else []
+    prefix = f"{key}="
+    lines = [l for l in lines if not l.startswith(prefix)]
+    lines.append(f"{key}={new_pass}")
+    _PANEL_ENV.write_text("\n".join(lines) + "\n")
+
+
+@app.post("/api/auth/login", include_in_schema=False)
+async def auth_login(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return json_response({"ok": False, "error": "bad_json"}, status=400)
+    username = body.get("username", "").lower()
+    password = body.get("password", "")
+    if username not in _allowed_users():
+        return json_response({"ok": False, "error": "invalid"}, status=401)
+    if username == "":
+        if password != "":
+            return json_response({"ok": False, "error": "invalid"}, status=401)
+        return json_response({"ok": True, "name": "dev"})
+    if password != _get_pass(username):
+        return json_response({"ok": False, "error": "invalid"}, status=401)
+    return json_response({"ok": True, "name": username})
+
+
+@app.post("/api/auth/change-password", include_in_schema=False)
+async def auth_change_password(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return json_response({"ok": False, "error": "bad_json"}, status=400)
+    username = body.get("username", "").lower()
+    old_pass = body.get("old_password", "")
+    new_pass = body.get("new_password", "")
+    if username == "" or username not in _PROD_USERS:
+        return json_response({"ok": False, "error": "invalid_user"}, status=400)
+    if old_pass != _get_pass(username):
+        return json_response({"ok": False, "error": "wrong_password"}, status=401)
+    _set_pass(username, new_pass)
+    return json_response({"ok": True})
 
 
 @app.get("/api/sun/times", include_in_schema=False)

@@ -376,18 +376,11 @@ document.querySelectorAll('.ctrl-btn[data-ch=""]').forEach(btn => {
 });
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-const ACCS = {
-  'volosati': { pass: '12345', name: 'volosati' },
-  'max':      { pass: '12345', name: 'max'       },
-  'polini':   { pass: '12345', name: 'polini'    },
-};
-
 function getUser() { try { return JSON.parse(sessionStorage.getItem('sdom_u')); } catch { return null; } }
 function updateMenu() {
   const u = getUser();
   document.getElementById('menu-logged').classList.toggle('visible', !!u);
   if (u) {
-    // Show build info instead of username
     fetch('/api/build')
       .then(function(r) { return r.json(); })
       .then(function(d) {
@@ -405,16 +398,22 @@ function updateMenu() {
   }
 }
 function doLogin() {
-  const l = document.getElementById('login-in').value;
-  const p = document.getElementById('pass-in').value;
-  const a = ACCS[l];
-  const err = document.getElementById('menu-err');
-  if (!a || a.pass !== p) { err.textContent = 'Неверный логин или пароль'; return; }
-  err.textContent = '';
-  sessionStorage.setItem('sdom_u', JSON.stringify({ name: a.name }));
-  document.getElementById('login-in').value = '';
-  document.getElementById('pass-in').value  = '';
-  updateMenu();
+  var l = document.getElementById('login-in').value;
+  var p = document.getElementById('pass-in').value;
+  var err = document.getElementById('menu-err');
+  fetch('/api/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: l, password: p })
+  }).then(function(r) { return r.json(); })
+  .then(function(d) {
+    if (!d.ok) { err.textContent = 'Неверный логин или пароль'; return; }
+    err.textContent = '';
+    sessionStorage.setItem('sdom_u', JSON.stringify({ name: d.name }));
+    document.getElementById('login-in').value = '';
+    document.getElementById('pass-in').value  = '';
+    updateMenu();
+  }).catch(function() { err.textContent = 'Ошибка подключения'; });
 }
 function doLogout() { sessionStorage.removeItem('sdom_u'); updateMenu(); }
 
@@ -543,6 +542,37 @@ function scUpdateTrackInfo(sound) {
   if (art) document.getElementById('sc-art').src = art.replace('-large', '-t50x50');
 }
 
+function scSetNativeVisual(item, data) {
+  var wrap = document.getElementById('sc-frame-wrap');
+  if (wrap) wrap.classList.add('native');
+  var title = (data && data.title) || (item && item.title) || 'SoundCloud';
+  var thumb = (data && data.thumbnail) || (item && item.thumbnail) || '';
+  var titleEl = document.getElementById('sc-native-title');
+  var subEl = document.getElementById('sc-native-sub');
+  var img = document.getElementById('sc-native-art');
+  var visual = document.getElementById('sc-native-visual');
+  if (titleEl) titleEl.textContent = cleanTitle(title);
+  if (subEl) subEl.textContent = 'native stream';
+  if (visual) visual.classList.add('paused');
+  if (img) {
+    if (thumb) {
+      img.src = localThumbUrl(thumb);
+    } else {
+      img.removeAttribute('src');
+    }
+  }
+}
+function scHideNativeVisual() {
+  var wrap = document.getElementById('sc-frame-wrap');
+  if (wrap) wrap.classList.remove('native');
+  var visual = document.getElementById('sc-native-visual');
+  if (visual) visual.classList.add('paused');
+}
+function scSetNativeVisualPlaying(playing) {
+  var visual = document.getElementById('sc-native-visual');
+  if (visual) visual.classList.toggle('paused', !playing);
+}
+
 function scFmtTime(ms) {
   const s = Math.floor(ms / 1000);
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
@@ -653,50 +683,12 @@ function pauseYT() {
 
 async function scLoadInWidget(url, autoplay = true) {
   console.log('scLoadInWidget(start):', url, 'autoplay=' + autoplay, 'scWidget=' + (scWidget ? 'ok' : 'null'));
-  // Sync UI reset: the previous track's PLAY state is meaningless for the
-  // new URL. Without this, scIsPlaying stays true while the widget is
-  // still loading the new URL, and a quick tap on bar pause fires
-  // scWidget.pause() at a half-loaded widget (no-op) — looking like
-  // "panel froze, didn't switch state".
   scIsPlaying = false;
   setBarPlayPauseIcon(false);
-  // Sync fast path for autoplay: skip resolveUrl to keep the user-gesture
-  // token alive (Chrome/mobile autoplay policy). Only short on.soundcloud.com
-  // links need redirect-following — pass the rest through immediately.
   var SC_SHORT = /on\.soundcloud\.com/;
-  if (autoplay && scWidget && !SC_SHORT.test(url)) {
-    console.log('scLoadInWidget(sync-fast-path):', url);
-    document.getElementById('sc-placeholder').classList.add('hidden');
-    scShowBar();
-    pauseYT();
-    try { localStorage.setItem('sc_last_url', url); } catch(e) {}
-    // Autoplay after .load() needs event-based forcing because Bromite
-    // ignores auto_play option and the .load() callback path doesn't
-    // get past its autoplay policy. Set a one-shot LOAD_PROGRESS hook
-    // — first buffer event from the new URL = the widget actually
-    // started loading the track, so .play() now has the gesture-bridge
-    // it needs. Safety net at 2500ms in case neither callback nor
-    // LOAD_PROGRESS fires.
-    var playForced = false;
-    function forcePlay(reason) {
-      if (playForced) return;
-      playForced = true;
-      console.warn('scLoadInWidget: forcing play via ' + reason);
-      try { scWidget.play(); } catch (e) { console.warn('SC play() failed:', e); }
-    }
-    var lpHandler = function () {
-      try { scWidget.unbind(SC.Widget.Events.LOAD_PROGRESS); } catch(_) {}
-      forcePlay('LOAD_PROGRESS');
-    };
-    try { scWidget.bind(SC.Widget.Events.LOAD_PROGRESS, lpHandler); } catch(_) {}
-    setTimeout(function(){ forcePlay('timeout-2500ms'); }, 2500);
-    scWidget.load(url, { auto_play: true, show_comments: false, show_reposts: false, show_teaser: false }, function() {
-      console.log('scLoadInWidget: .load() callback fired');
-      forcePlay('load-callback');
-    });
-    return;
+  if (SC_SHORT.test(url)) {
+    url = await resolveUrl(url);
   }
-  url = await resolveUrl(url);
   console.log('scLoadInWidget(resolved):', url);
   if (SC_UNSUPPORTED.test(url)) {
     const ph = document.getElementById('sc-placeholder');
@@ -712,25 +704,29 @@ async function scLoadInWidget(url, autoplay = true) {
   ph.querySelector('div:last-child').textContent = 'Вставь ссылку SC или подключи аккаунт';
   scShowBar();
   if (autoplay) pauseYT();
-  if (autoplay) localStorage.setItem('sc_last_url', url);
+  if (autoplay) {
+    try { localStorage.setItem('sc_last_url', url); } catch(e) {}
+  }
   if (scWidget) {
-    // SC Widget.load() ignores auto_play on mobile (browser autoplay policy).
-    // Workaround: pass an after-load callback that explicitly calls play().
-    scWidget.load(url, { auto_play: autoplay, show_comments: false, show_reposts: false, show_teaser: false }, function() {
-      if (autoplay) {
-        try { scWidget.play(); } catch (e) { console.warn('SC play() failed:', e); }
-      }
-    });
-    return;
+    try { scWidget.unbind(SC.Widget.Events.PLAY); } catch(_) {}
+    try { scWidget.unbind(SC.Widget.Events.PAUSE); } catch(_) {}
+    try { scWidget.unbind(SC.Widget.Events.FINISH); } catch(_) {}
+    try { scWidget.unbind(SC.Widget.Events.PLAY_PROGRESS); } catch(_) {}
+    try { scWidget.unbind(SC.Widget.Events.READY); } catch(_) {}
+    try { scWidget.unbind(SC.Widget.Events.LOAD_PROGRESS); } catch(_) {}
+    scWidget = null;
   }
   const enc = encodeURIComponent(url);
-  scFrame.src = `https://w.soundcloud.com/player/?url=${enc}&color=%23fff500&auto_play=${autoplay}&visual=true&show_comments=false&show_reposts=false&show_teaser=false`;
-  scInitWidgetApi(() => scBindWidget(scFrame));
+  scFrame.addEventListener('load', function() {
+    scInitWidgetApi(() => scBindWidget(scFrame));
+  }, { once: true });
+  scFrame.src = 'https://w.soundcloud.com/player/?url=' + enc + '&color=%23fff500&auto_play=' + autoplay + '&visual=true&show_comments=false&show_reposts=false&show_teaser=false';
 }
+
 
 // ── Universal player controls ──────────────────────────────────────────────
 let activePlayer = 1; // 0=YT, 1=SC, 2=SP
-let ytPlaying = false, ytDuration = 0;
+let ytPlaying = false, ytDuration = 0, ytStarted = false;
 var ytAutoNextTimer = null;
 function ytAutoNext() {
   // Debounce: onStateChange(0) and infoDelivery(playerState=0) can both fire
@@ -784,11 +780,86 @@ function ytCancelWatchdog() {
   if (ytWatchdogTimer) { clearTimeout(ytWatchdogTimer); ytWatchdogTimer = null; }
 }
 
+var ytOfficialApiReady = false;
+var ytOfficialApiLoading = false;
+var ytOfficialApiCallbacks = [];
+var ytOfficialPlayer = null;
+var ytOfficialBindSeq = 0;
+function ytEnsureOfficialApi(cb) {
+  if (window.YT && window.YT.Player) { cb(); return; }
+  ytOfficialApiCallbacks.push(cb);
+  if (ytOfficialApiLoading) return;
+  ytOfficialApiLoading = true;
+  var prev = window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady = function() {
+    ytOfficialApiReady = true;
+    console.log('YT official API ready');
+    if (typeof prev === 'function') { try { prev(); } catch(_) {} }
+    var callbacks = ytOfficialApiCallbacks.splice(0);
+    callbacks.forEach(function(fn) { try { fn(); } catch(e) { console.warn('YT official callback threw:', e && e.message); } });
+  };
+  var s = document.createElement('script');
+  s.src = 'https://www.youtube.com/iframe_api';
+  s.onerror = function() { console.warn('YT official API script failed'); };
+  document.head.appendChild(s);
+}
+function ytBindOfficialPlayer() {
+  ytEnsureOfficialApi(function() {
+    var seq = ++ytOfficialBindSeq;
+    try {
+      ytOfficialPlayer = new YT.Player('yt-frame', {
+        events: {
+          onReady: function(ev) {
+            if (seq !== ytOfficialBindSeq) return;
+            console.log('YT official onReady');
+            try { ev.target.playVideo(); } catch(e) { console.warn('YT official playVideo threw:', e && e.message); }
+          },
+          onStateChange: function(ev) {
+            if (seq !== ytOfficialBindSeq) return;
+            console.log('YT official state:', ev.data);
+            ytPlaying = ev.data === 1;
+            if (ytPlaying) ytStarted = true;
+            setBarPlayPauseIcon(ytPlaying);
+            if (ev.data === 1) ytCancelWatchdog();
+            if (ev.data === 0) {
+              if (ytStarted) ytAutoNext();
+              else ytShowError();
+            }
+          },
+          onError: function(ev) {
+            if (seq !== ytOfficialBindSeq) return;
+            console.warn('YT official error:', ev.data);
+            ytShowError();
+          },
+          onAutoplayBlocked: function() {
+            if (seq !== ytOfficialBindSeq) return;
+            console.warn('YT official autoplay blocked');
+          }
+        }
+      });
+      console.log('YT official player bind requested');
+    } catch (e) {
+      console.warn('YT official bind threw:', e && e.message);
+    }
+  });
+}
+
 function ytCmd(func, args) {
   try {
     document.getElementById('yt-frame').contentWindow.postMessage(
       JSON.stringify({ event: 'command', func, args: args ?? '' }), '*');
   } catch {}
+}
+
+function ytSendListening() {
+  var f = document.getElementById('yt-frame');
+  if (!f || !f.contentWindow) return;
+  try {
+    f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
+    f.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: '1', channel: 'widget' }), '*');
+    f.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: '', id: 1, channel: 'widget' }), '*');
+    console.log('YT listening handshake sent (numeric + string + playVideo)');
+  } catch (e) { console.warn('YT listening send threw:', e && e.message); }
 }
 
 // YT IFrame API handshake. Without this the iframe never sends state
@@ -801,16 +872,9 @@ function ytCmd(func, args) {
     var f = document.getElementById('yt-frame');
     if (!f) return;
     f.addEventListener('load', function () {
-      try {
-        // YT iframe API expects a numeric id for the listening handshake.
-        // Send both variants — some embed builds accept string, some only
-        // numeric. Cost is one extra postMessage.
-        f.contentWindow.postMessage(
-          JSON.stringify({ event: 'listening', id: 1, channel: 'widget' }), '*');
-        f.contentWindow.postMessage(
-          JSON.stringify({ event: 'listening', id: '1', channel: 'widget' }), '*');
-        console.log('YT listening handshake sent (numeric + string)');
-      } catch (e) { console.warn('YT listening send threw:', e && e.message); }
+      ytSendListening();
+      setTimeout(ytSendListening, 800);
+      setTimeout(ytSendListening, 2000);
     });
   });
 })();
@@ -843,12 +907,16 @@ function scPlayPause() {
   }
   if (activePlayer === 3 && nativeAudio) {
     if (nativeAudio.paused) { try { nativeAudio.play(); } catch(e) {} }
-    else { try { nativeAudio.pause(); } catch(e) {} }
+    else { btSetState(false); try { nativeAudio.pause(); } catch(e) {} }
     return;
   }
-  if (activePlayer === 0) { ytPlaying ? ytCmd('pauseVideo') : ytCmd('playVideo'); }
+  if (activePlayer === 0) {
+    if (ytPlaying) { btSetState(false); ytCmd('pauseVideo'); }
+    else { ytCmd('playVideo'); }
+  }
   else if (scWidget) {
     if (scIsPlaying) {
+      btSetState(false);
       console.warn('scPlayPause: calling scWidget.pause()');
       try { scWidget.pause(); } catch(e) { console.warn('SC pause threw:', e); }
     } else {
@@ -927,6 +995,7 @@ async function nativePlayPlaylistIndex(idx) {
       return;
     }
     var d = await r.json();
+    nativeResolveCache[entry.url] = d;
     if (!d || !d.stream_url) {
       console.warn('native: playlist resolve no stream_url');
       return;
@@ -944,8 +1013,11 @@ async function nativePlayPlaylistIndex(idx) {
       if (art) {
         art.classList.remove('yt-icon');
         art.style.background = '';
-        art.src = d.thumbnail || entry.thumbnail;
+        art.src = localThumbUrl(d.thumbnail || entry.thumbnail);
       }
+    }
+    if (entry.url) {
+      ytStartNativeVideo({ url: entry.url, service: 'youtube', title: d.title || entry.title || '', thumbnail: d.thumbnail || entry.thumbnail });
     }
     try {
       var p = audio.play();
@@ -1086,9 +1158,13 @@ window.addEventListener('message', e => {
     const d = JSON.parse(typeof e.data === 'string' ? e.data : '{}');
     if (d.event === 'onStateChange') {
       ytPlaying = d.info === 1;
+      if (d.info === 1) ytStarted = true;
       setBarPlayPauseIcon(ytPlaying);
       if (d.info === 1) ytCancelWatchdog();  // playing — cancel watchdog
-      if (d.info === 0) ytAutoNext();         // ended → next in panel playlist
+      if (d.info === 0) {
+        if (ytStarted) ytAutoNext();
+        else ytShowError();
+      }
     }
     if (d.event === 'onError') {
       // Embed-restricted (101/150), removed/private (100), or other — show overlay + skip
@@ -1101,12 +1177,16 @@ window.addEventListener('message', e => {
       // -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued.
       if (typeof d.info.playerState !== 'undefined') {
         var playing = d.info.playerState === 1;
+        if (playing) ytStarted = true;
         if (playing !== ytPlaying) {
           ytPlaying = playing;
           setBarPlayPauseIcon(ytPlaying);
         }
         if (d.info.playerState === 1) ytCancelWatchdog();  // playing
-        if (d.info.playerState === 0) ytAutoNext();         // ended via infoDelivery
+        if (d.info.playerState === 0) {
+          if (ytStarted) ytAutoNext();
+          else ytShowError();
+        }
       }
       // YT sends title in videoData sub-object
       if (d.info.videoData) ytApplyVideoData(d.info.videoData);
@@ -1318,6 +1398,141 @@ function detectService(url) {
   return null;
 }
 
+function youtubeVideoId(url) {
+  var raw = url || '';
+  var m = raw.match(/[?&]v=([^&#]+)/) || raw.match(/youtu\.be\/([^?&#]+)/) || raw.match(/youtube\.com\/shorts\/([^?&#]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function localThumbUrl(src) {
+  if (!src) return '';
+  if (/^\/api\/thumb\?/.test(src)) return src;
+  if (/^https?:\/\/(img\.youtube\.com|i\.ytimg\.com)\//i.test(src)) return '/api/thumb?url=' + encodeURIComponent(src);
+  return src;
+}
+
+function youtubeThumbUrl(item) {
+  var src = item && item.thumbnail ? item.thumbnail : '';
+  if (!src && item && item.url) {
+    var vid = youtubeVideoId(item.url);
+    if (vid) src = 'https://i.ytimg.com/vi/' + encodeURIComponent(vid) + '/hqdefault.jpg';
+  }
+  return localThumbUrl(src);
+}
+
+function ytShowPoster(item, src) {
+  var poster = document.getElementById('yt-thumb-poster');
+  var img = document.getElementById('yt-thumb-img');
+  if (!poster || !img) return;
+  var thumb = localThumbUrl(src || youtubeThumbUrl(item));
+  if (!thumb) { poster.classList.remove('show'); img.removeAttribute('src'); return; }
+  img.onerror = function() { poster.classList.remove('show'); img.removeAttribute('src'); };
+  img.onload = function() { console.log('YT thumb poster loaded'); };
+  img.src = thumb;
+  poster.classList.add('show');
+}
+
+function ytHidePoster() {
+  var poster = document.getElementById('yt-thumb-poster');
+  if (poster) poster.classList.remove('show');
+}
+
+var ytVideoSeq = 0;
+var ytVideoUserGestureSeen = false;
+var ytVideoResolvedCache = {};
+function ytStopNativeVideo() {
+  ytVideoSeq++;
+  var video = document.getElementById('yt-video');
+  if (!video) return;
+  try { video.pause(); } catch(_) {}
+  video.classList.remove('show');
+  video.removeAttribute('src');
+  try { video.load(); } catch(_) {}
+}
+
+function ytResumeNativeVideoFromGesture() {
+  var video = document.getElementById('yt-video');
+  if (!video) return;
+  ytVideoUserGestureSeen = true;
+  if (!video.getAttribute('src') || !video.paused) return;
+  video.muted = true;
+  video.defaultMuted = true;
+  video.setAttribute('muted', '');
+  video.setAttribute('autoplay', '');
+  try {
+    var p = video.play();
+    console.log('YT native video: gesture play requested');
+    if (p && typeof p.catch === 'function') {
+      p.catch(function(e) { console.warn('YT native video: gesture play rejected:', e && e.message); });
+    }
+  } catch(e) {
+    console.warn('YT native video: gesture play threw:', e && e.message);
+  }
+}
+['pointerdown', 'touchstart', 'mousedown', 'click'].forEach(function(evt) {
+  document.addEventListener(evt, ytResumeNativeVideoFromGesture, true);
+});
+async function ytStartNativeVideo(item) {
+  var video = document.getElementById('yt-video');
+  if (!video || !item || !item.url) return false;
+  var seq = ++ytVideoSeq;
+  video.muted = true;
+  video.defaultMuted = true;
+  video.autoplay = true;
+  video.playsInline = true;
+  video.setAttribute('muted', '');
+  video.setAttribute('autoplay', '');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.onerror = function() { console.warn('YT native video: element error'); };
+  video.onloadeddata = function() {
+    if (seq !== ytVideoSeq) return;
+    video.classList.add('show');
+    ytHidePoster();
+    console.log('YT native video: frame loaded');
+  };
+  video.onplaying = function() {
+    if (seq !== ytVideoSeq) return;
+    video.classList.add('show');
+    ytHidePoster();
+    video._ytLoggedMoving = false;
+    console.log('YT native video: playing');
+  };
+  video.ontimeupdate = function() {
+    if (seq !== ytVideoSeq || video._ytLoggedMoving) return;
+    if (video.currentTime > 1.5) {
+      video._ytLoggedMoving = true;
+      console.log('YT native video: moving currentTime=' + video.currentTime.toFixed(1));
+    }
+  };
+  try {
+    console.log('YT native video: resolving');
+    var r = await fetch('/api/stream/resolve?mode=video&url=' + encodeURIComponent(item.url));
+    if (seq !== ytVideoSeq) return false;
+    if (!r.ok) {
+      console.warn('YT native video: resolve http ' + r.status);
+      return false;
+    }
+    var d = await r.json();
+    if (!d || !d.stream_url) {
+      console.warn('YT native video: resolve no stream_url', d && d.error);
+      return false;
+    }
+    console.log('YT native video: resolve ok', d.title || item.url);
+    ytVideoResolvedCache[item.url] = d;
+    video.src = d.stream_url;
+    if (ytVideoUserGestureSeen) setTimeout(ytResumeNativeVideoFromGesture, 0);
+    var p = video.play();
+    if (p && typeof p.catch === 'function') {
+      p.catch(function(e) { console.warn('YT native video: play() rejected:', e && e.message); });
+    }
+    return true;
+  } catch(e) {
+    console.warn('YT native video: resolve threw:', e && e.message);
+    return false;
+  }
+}
+
 async function fetchMeta(url) {
   try {
     const r = await fetch('/api/oembed?url=' + encodeURIComponent(url));
@@ -1328,7 +1543,7 @@ async function fetchMeta(url) {
     return { title: title, thumbnail: thumbnail };
   } catch {
     const vidM = url.match(/(?:youtu\.be\/|[?&]v=)([^&#]+)/);
-    if (vidM) return { title: url, thumbnail: 'https://img.youtube.com/vi/' + vidM[1] + '/mqdefault.jpg' };
+    if (vidM) return { title: url, thumbnail: localThumbUrl('https://img.youtube.com/vi/' + vidM[1] + '/mqdefault.jpg') };
     return { title: url, thumbnail: null };
   }
 }
@@ -1345,6 +1560,7 @@ async function addToSaved(url, overrideTitle) {
   savedList.unshift({ id: Date.now(), url, service, title: title, thumbnail: meta.thumbnail });
   savedSave();
   renderSavedList();
+try { nativePrewarmSavedList(); } catch(_) {}
   loadSavedItem(savedList[0]);
 }
 
@@ -1399,7 +1615,7 @@ function renderSavedList() {
       const el = document.createElement('div');
       el.className = 'saved-item' + (savedEditMode ? ' edit-mode' : '') + (item.reserve ? ' reserve' : '') + (item.url === currentSavedUrl ? ' active' : '');
       el.dataset.idx = i;
-      const thumbSrc = item.thumbnail || '';
+      const thumbSrc = localThumbUrl(item.thumbnail || '');
       el.innerHTML = `
         <div class="saved-drag-h" title="Перетащить">⠿</div>
         ${thumbSrc ? `<img class="saved-thumb" src="${thumbSrc}" onerror="savedThumbErr(this,'${cls}','${txt}')" alt="">` : `<div class="svc-ico ${cls}">${txt}</div>`}
@@ -1518,13 +1734,16 @@ document.addEventListener('mouseup', dragEnd);
 let nativeAudio = null;
 let nativeCurrent = null;     // { url, item, resolved_at, expires_at }
 let nativeReresolveTimer = null;
+let nativeResolveCache = {};
+let nativeResolvePollTimer = null;
 
 var ICON_PLAY  = '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 var ICON_PAUSE = '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
 function setBarPlayPauseIcon(playing) {
   var el = document.getElementById('sc-playpause');
   if (el) el.innerHTML = playing ? ICON_PAUSE : ICON_PLAY;
-  btSetState(playing);
+  // BT ON on any play; BT OFF only by explicit pause button press (scPlayPause)
+  if (playing) btSetState(true);
 }
 
 function ensureNativeAudio() {
@@ -1540,20 +1759,26 @@ function ensureNativeAudio() {
   document.body.appendChild(nativeAudio);
   nativeAudio.addEventListener('play', function() {
     console.log('native: play');
-    if (activePlayer === 3) setBarPlayPauseIcon(true);
+    if (activePlayer === 3) { setBarPlayPauseIcon(true); scSetNativeVisualPlaying(true); }
   });
   nativeAudio.addEventListener('pause', function() {
     console.log('native: pause');
-    if (activePlayer === 3) setBarPlayPauseIcon(false);
+    if (activePlayer === 3) { setBarPlayPauseIcon(false); scSetNativeVisualPlaying(false); }
   });
   nativeAudio.addEventListener('timeupdate', function() {
     if (activePlayer !== 3) return;
     var dur = nativeAudio.duration;
     var cur = nativeAudio.currentTime;
+    if (!nativeAudio._scLoggedMoving && cur > 1.5) {
+      nativeAudio._scLoggedMoving = true;
+      console.log('SC native stream: moving currentTime=' + cur.toFixed(1));
+    }
     if (dur && isFinite(dur)) {
       var pct = (cur / dur) * 100;
       var fill = document.getElementById('sc-prog-fill');
       if (fill) fill.style.width = pct + '%';
+      var thumb = document.getElementById('sc-prog-thumb');
+      if (thumb) thumb.style.left = pct + '%';
       var curEl = document.getElementById('sc-time-cur');
       var durEl = document.getElementById('sc-time-dur');
       if (curEl) curEl.textContent = scFmtTime(cur * 1000);
@@ -1597,6 +1822,142 @@ function ensureNativeAudio() {
   return nativeAudio;
 }
 
+
+function nativeCachedResolve(item) {
+  if (!item || !item.url) return null;
+  var d = nativeResolveCache[item.url];
+  if (!d || !d.stream_url) return null;
+  var expiresAt = d.expires_at ? d.expires_at * 1000 : 0;
+  if (expiresAt && expiresAt < Date.now() + 15000) {
+    delete nativeResolveCache[item.url];
+    return null;
+  }
+  return d;
+}
+
+function nativeApplyResolvedStream(item, d, respectPauseState) {
+  if (!d || !d.stream_url) return false;
+  console.log('native: cached resolve ok', d.title || item.url, d.is_playlist ? ('(playlist ' + (d.items ? d.items.length : 0) + ' items)') : '');
+  var audio = ensureNativeAudio();
+  var wasPaused = audio.paused;
+  var prevTime = audio.currentTime;
+  audio.loop = false;
+  audio._scLoggedMoving = false;
+  audio.src = d.stream_url;
+  activePlayer = 3;
+  if (item && item.service === 'soundcloud') scSetNativeVisual(item, d);
+  nativeCurrent = {
+    url: item.url,
+    item: item,
+    resolved_at: Date.now(),
+    expires_at: d.expires_at ? d.expires_at * 1000 : (Date.now() + 240 * 1000),
+    playlist_items: (d.is_playlist && Array.isArray(d.items)) ? d.items : null,
+    playlist_idx: 0,
+  };
+  if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
+  if (d.thumbnail) {
+    var art = document.getElementById('sc-art');
+    if (art) {
+      var dt = localThumbUrl(d.thumbnail);
+      var itemThumb = item && item.thumbnail;
+      var keepItemThumb = itemThumb && /\.jpg(\?|$)/i.test(itemThumb) && /\.webp(\?|$)/i.test(dt);
+      if (!keepItemThumb) {
+        art.classList.remove('yt-icon');
+        art.style.background = '';
+        art.src = dt;
+        art.onerror = function() {
+          this.onerror = null;
+          if (item && item.url) {
+            var vm = item.url.match(/[?&]v=([^&#]+)/) || item.url.match(/youtu\.be\/([^?&#]+)/);
+            if (vm) { this.src = localThumbUrl('https://i.ytimg.com/vi/' + vm[1] + '/hqdefault.jpg'); return; }
+          }
+          this.src = '';
+          this.classList.add('yt-icon');
+        };
+      }
+    }
+  }
+  if (respectPauseState && wasPaused) {
+    console.log('native: cached re-resolve skipped autoplay — user paused');
+    if (prevTime > 0) {
+      var restorePos = function() { try { audio.currentTime = prevTime; } catch(_) {} audio.removeEventListener('loadedmetadata', restorePos); };
+      audio.addEventListener('loadedmetadata', restorePos);
+    }
+  } else {
+    try {
+      audio.muted = false;
+      audio.volume = 1;
+      var p = audio.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(function(e) { console.warn('native: play() rejected:', e && e.message); });
+      }
+    } catch(e) {
+      console.warn('native: play() threw:', e);
+    }
+  }
+  if (nativeReresolveTimer) clearTimeout(nativeReresolveTimer);
+  var leadMs = Math.max(30 * 1000, (nativeCurrent.expires_at - Date.now()) - 30 * 1000);
+  nativeReresolveTimer = setTimeout(function() {
+    if (nativeCurrent && nativeCurrent.item === item) {
+      nativeReresolveAndPlay(item, true, true);
+    }
+  }, leadMs);
+  return true;
+}
+
+function nativePlayCached(item) {
+  if (item && item.service === 'youtube') return false;
+  var d = nativeCachedResolve(item);
+  if (!d) return false;
+  return nativeApplyResolvedStream(item, d, false);
+}
+
+function nativePrewarmSavedList() {
+  try {
+    if (!Array.isArray(savedList) || !savedList.length) return;
+    var urls = savedList
+      .filter(function(it) { return it && (it.service === 'soundcloud' || it.service === 'youtube') && it.url; })
+      .map(function(it) { return it.url; });
+    if (!urls.length) return;
+    fetch('/api/stream/prewarm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls: urls })
+    }).catch(function(e) { console.warn('native: prewarm failed', e && e.message); });
+    nativePollResolveReady(urls);
+  } catch(e) {
+    console.warn('native: prewarm threw', e && e.message);
+  }
+}
+
+function nativePollResolveReady(urls) {
+  if (nativeResolvePollTimer) clearTimeout(nativeResolvePollTimer);
+  var pending = urls.slice(0, 50);
+  var startedAt = Date.now();
+  var tick = function() {
+    Promise.all(pending.map(function(url) {
+      return fetch('/api/stream/ready?url=' + encodeURIComponent(url))
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(d) {
+          if (d && d.ready && d.payload && d.payload.stream_url) {
+            nativeResolveCache[url] = d.payload;
+            return null;
+          }
+          return url;
+        })
+        .catch(function() { return url; });
+    })).then(function(next) {
+      pending = next.filter(Boolean);
+      if (pending.length && Date.now() - startedAt < 45000) {
+        nativeResolvePollTimer = setTimeout(tick, 1500);
+      } else {
+        nativeResolvePollTimer = null;
+      }
+    });
+  };
+  tick();
+}
+
 function nativeStop() {
   if (!nativeAudio) return;
   try { nativeAudio.pause(); } catch(e) {}
@@ -1615,6 +1976,7 @@ async function nativeReresolveAndPlay(item, isRetry, respectPauseState) {
       return false;
     }
     var d = await r.json();
+    nativeResolveCache[item.url] = d;
     if (!d || !d.stream_url) {
       console.warn('native: resolve no stream_url', d && d.error);
       return false;
@@ -1628,8 +1990,10 @@ async function nativeReresolveAndPlay(item, isRetry, respectPauseState) {
     // Turn off the unlock loop before swapping to the real stream URL,
     // otherwise the track would loop forever at end.
     audio.loop = false;
+    audio._scLoggedMoving = false;
     audio.src = d.stream_url;
     activePlayer = 3;
+    if (item && item.service === 'soundcloud') scSetNativeVisual(item, d);
     nativeCurrent = {
       url: item.url,
       item: item,
@@ -1647,7 +2011,7 @@ async function nativeReresolveAndPlay(item, isRetry, respectPauseState) {
       if (art) {
         // Prefer JPG over WEBP — Bromite v108 sometimes fails on i.ytimg.com webp.
         // If the saved-list item already gave us a JPG thumbnail, keep that.
-        var dt = d.thumbnail;
+        var dt = localThumbUrl(d.thumbnail);
         var itemThumb = item && item.thumbnail;
         var keepItemThumb = itemThumb && /\.jpg(\?|$)/i.test(itemThumb) && /\.webp(\?|$)/i.test(dt);
         if (!keepItemThumb) {
@@ -1659,7 +2023,7 @@ async function nativeReresolveAndPlay(item, isRetry, respectPauseState) {
             this.onerror = null;
             if (item && item.url) {
               var vm = item.url.match(/[?&]v=([^&#]+)/) || item.url.match(/youtu\.be\/([^?&#]+)/);
-              if (vm) { this.src = 'https://i.ytimg.com/vi/' + vm[1] + '/hqdefault.jpg'; return; }
+              if (vm) { this.src = localThumbUrl('https://i.ytimg.com/vi/' + vm[1] + '/hqdefault.jpg'); return; }
             }
             this.src = '';
             this.classList.add('yt-icon');
@@ -1677,24 +2041,36 @@ async function nativeReresolveAndPlay(item, isRetry, respectPauseState) {
     } else {
       try {
         // Must be called synchronously in the click-gesture chain on first hit.
+        audio.muted = false;
+        audio.volume = 1;
         var p = audio.play();
-        if (p && typeof p.catch === 'function') {
-          p.catch(function(e) { console.warn('native: play() rejected:', e && e.message); });
+        if (p && typeof p.then === 'function') {
+          try {
+            await p;
+          } catch (e) {
+            console.warn('native: play() rejected:', e && e.message);
+            setBarPlayPauseIcon(false);
+            return false;
+          }
         }
       } catch(e) {
         console.warn('native: play() threw:', e);
+        setBarPlayPauseIcon(false);
+        return false;
       }
     }
     // Schedule a pre-emptive re-resolve ~30s before expiry. Pass
     // respectPauseState=true so the timer does NOT unpause user-paused tracks.
     if (nativeReresolveTimer) clearTimeout(nativeReresolveTimer);
-    var leadMs = Math.max(30 * 1000, (nativeCurrent.expires_at - Date.now()) - 30 * 1000);
-    nativeReresolveTimer = setTimeout(function() {
-      if (nativeCurrent && nativeCurrent.item === item) {
-        console.log('native: pre-emptive re-resolve');
-        nativeReresolveAndPlay(item, false, true);
-      }
-    }, leadMs);
+    if (item.service !== 'youtube') {
+      var leadMs = Math.max(30 * 1000, (nativeCurrent.expires_at - Date.now()) - 30 * 1000);
+      nativeReresolveTimer = setTimeout(function() {
+        if (nativeCurrent && nativeCurrent.item === item) {
+          console.log('native: pre-emptive re-resolve');
+          nativeReresolveAndPlay(item, false, true);
+        }
+      }, leadMs);
+    }
     return true;
   } catch(e) {
     console.warn('native: resolve threw:', e && e.message);
@@ -1767,13 +2143,13 @@ function applySavedItemBarPreview(item) {
   art.style.background = '';
   art.removeAttribute('src');
   if (item.thumbnail) {
-    art.src = item.thumbnail;
+    art.src = localThumbUrl(item.thumbnail);
     art.onerror = function() {
       this.onerror = null;
       // Fall back to the canonical YT thumbnail URL (works through tinyproxy/Throne).
       var vm = (item.url || '').match(/[?&]v=([^&#]+)/) || (item.url || '').match(/youtu\.be\/([^?&#]+)/);
       if (vm && item.service === 'youtube') {
-        this.src = 'https://i.ytimg.com/vi/' + vm[1] + '/hqdefault.jpg';
+        this.src = localThumbUrl('https://i.ytimg.com/vi/' + vm[1] + '/hqdefault.jpg');
       } else {
         this.removeAttribute('src');
         this.classList.add('yt-icon');
@@ -1784,7 +2160,7 @@ function applySavedItemBarPreview(item) {
     var m2 = (item.url || '').match(/[?&]v=([^&#]+)/);
     var vid = m1 ? m1[1] : (m2 ? m2[1] : null);
     if (vid) {
-      art.src = 'https://img.youtube.com/vi/' + vid + '/mqdefault.jpg';
+      art.src = localThumbUrl('https://img.youtube.com/vi/' + vid + '/mqdefault.jpg');
     } else {
       art.classList.add('yt-icon');
     }
@@ -1822,39 +2198,109 @@ function loadSavedItem(item) {
   loadSavedItemIframe(item);
 }
 
+function youtubeEmbedUrl(url) {
+  var raw = url || '';
+  var list = raw.match(/[?&]list=([^&#]+)/);
+  var video = raw.match(/[?&]v=([^&#]+)/) || raw.match(/youtu\.be\/([^?&#]+)/) || raw.match(/youtube\.com\/shorts\/([^?&#]+)/);
+  var qs = 'autoplay=1&controls=1&playsinline=1&enablejsapi=1&widgetid=1&rel=0&feature=oembed&origin=' + encodeURIComponent(window.location.origin) + '&widget_referrer=' + encodeURIComponent(window.location.href);
+  if (list && !video) return 'https://www.youtube-nocookie.com/embed/videoseries?list=' + encodeURIComponent(decodeURIComponent(list[1])) + '&' + qs;
+  if (video) {
+    var out = 'https://www.youtube-nocookie.com/embed/' + encodeURIComponent(decodeURIComponent(video[1])) + '?' + qs;
+    if (list) out += '&list=' + encodeURIComponent(decodeURIComponent(list[1]));
+    return out;
+  }
+  return raw;
+}
+
+function soundCloudEmbedUrl(url) {
+  var clean = (url || '').trim();
+  return 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(clean)
+    + '&auto_play=true&visual=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&buying=false&sharing=false&download=false';
+}
+
+function resetNativePlayback() {
+  try { nativeStop(); } catch(_) {}
+  scHideNativeVisual();
+  activePlayer = 0;
+}
+
 function loadSavedItemIframe(item) {
   ytHideError();
   if (item.service === 'youtube') {
+    resetNativePlayback();
+    nativePrimeForGesture();
+    ytStarted = false;
     setMediaTab(0);
-    // Immediately populate bar from saved item data
-    if (item.title) document.getElementById('sc-track-title').textContent = cleanTitle(item.title);
-    const m1 = item.url.match(/youtu\.be\/([^?&#]+)/);
-    const m2 = item.url.match(/[?&]v=([^&#]+)/);
-    const m3 = item.url.match(/[?&]list=([^&#]+)/);
-    const vid = m1 ? m1[1] : (m2 ? m2[1] : null);
-    const art = document.getElementById('sc-art');
-    if (vid) {
-      art.classList.remove('yt-icon'); art.style.background = '';
-      art.src = 'https://img.youtube.com/vi/' + vid + '/mqdefault.jpg';
-      art.onerror = function() { this.onerror = null; this.src = ''; this.classList.add('yt-icon'); };
+    barSetYT();
+    var ytFrame = document.getElementById('yt-frame');
+    var ytSrc = youtubeEmbedUrl(item.url);
+    console.log('YT iframe src:', ytSrc);
+    ytFrame.src = ytSrc;
+    ytShowPoster(item);
+    ytStartNativeVideo(item);
+    if (nativePlayCached(item)) {
+      console.log('YT native fallback: using cached stream');
+      setBarPlayPauseIcon(true);
     } else {
-      art.src = ''; art.classList.add('yt-icon'); art.style.background = '';
+      nativeReresolveAndPlay(item, false, true).then(function(ok) {
+        if (ok) {
+          var rd = nativeResolveCache[item.url];
+          if (rd && rd.thumbnail) { item.thumbnail = localThumbUrl(rd.thumbnail); ytShowPoster(item, item.thumbnail); savedSave(); renderSavedList(); }
+          console.log('YT native fallback: stream playing via resolver');
+          ytCancelWatchdog();
+          setBarPlayPauseIcon(true);
+        } else {
+          console.warn('YT native fallback: resolver failed, trying iframe API');
+          ytBindOfficialPlayer();
+          setTimeout(ytBindOfficialPlayer, 1500);
+          setTimeout(ytSendListening, 250);
+          setTimeout(ytSendListening, 1200);
+          setBarPlayPauseIcon(true);
+          ytStartWatchdog();
+        }
+      });
     }
-    // No YouTube Mix (?list=RD{vid}) — when track ends, panel handles next
-    // via ytAutoNext(). Mix caused silent failures: YouTube would auto-load
-    // an unavailable video inside the iframe without firing onError.
-    if (m3) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/videoseries?list=' + m3[1] + '&autoplay=1&enablejsapi=1';
-    else if (m1) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m1[1] + '?autoplay=1&enablejsapi=1';
-    else if (m2) document.getElementById('yt-frame').src = 'https://www.youtube-nocookie.com/embed/' + m2[1] + '?autoplay=1&enablejsapi=1';
-    ytStartWatchdog();
   } else if (item.service === 'soundcloud') {
+    ytStopNativeVideo();
+    ytHidePoster();
+    resetNativePlayback();
     setMediaTab(1);
-    scLoadInWidget(item.url);
+    barSetSC();
+    document.getElementById('sc-placeholder').classList.add('hidden');
+    var frame = document.getElementById('sc-frame');
+    frame.src = 'about:blank';
+    scSetNativeVisual(item, null);
+    if (nativePlayCached(item)) {
+      console.log('SC native stream: using cached resolver stream');
+      setBarPlayPauseIcon(true);
+    } else {
+      nativeReresolveAndPlay(item, false, false).then(function(ok) {
+        if (ok) {
+          console.log('SC native stream: playing via resolver');
+          setBarPlayPauseIcon(true);
+        } else {
+          console.warn('SC native stream: resolver failed, falling back to widget');
+          scHideNativeVisual();
+          frame.src = soundCloudEmbedUrl(item.url);
+          if (window.SC) {
+            setTimeout(function() {
+              scBindWidget(frame);
+              try { scWidget.play(); } catch(_) {}
+            }, 300);
+          }
+          setBarPlayPauseIcon(true);
+        }
+      });
+    }
   } else if (item.service === 'spotify') {
+    ytStopNativeVideo();
+    ytHidePoster();
     setMediaTab(2);
     const embedUrl = item.url.replace('open.spotify.com/', 'open.spotify.com/embed/');
     document.getElementById('sp-frame').src = embedUrl + (embedUrl.includes('?') ? '&' : '?') + 'utm_source=generator&theme=0';
   } else if (item.service === 'yandex_music' || item.service === 'yandex-music') {
+    ytStopNativeVideo();
+    ytHidePoster();
     setMediaTab(0);
     if (item.title) document.getElementById('sc-track-title').textContent = cleanTitle(item.title);
     const trk = item.url.match(/track\/(\d+)/);
@@ -1892,6 +2338,7 @@ async function savedAddSubmit() {
   document.getElementById('saved-add-row').classList.remove('show');
   inp.value = '';
   await addToSaved(url);
+  try { nativePrewarmSavedList(); } catch(_) {}
 }
 
 document.getElementById('saved-add-ok').addEventListener('click', savedAddSubmit);
@@ -2117,7 +2564,7 @@ function getCurrentPlayingItem() {
     return {
       url: 'https://www.youtube.com/watch?v=' + ytVideoData.video_id,
       title: ytVideoData.title || '',
-      thumbnail: 'https://i.ytimg.com/vi/' + ytVideoData.video_id + '/hqdefault.jpg',
+      thumbnail: localThumbUrl('https://i.ytimg.com/vi/' + ytVideoData.video_id + '/hqdefault.jpg'),
       service: 'youtube',
     };
   }
@@ -2172,7 +2619,22 @@ scApplyActiveAccount();
 scUpdateAccountsMenu();
 
 // Saved playlists init
-(async () => { await savedLoad(); renderSavedList(); savedRefreshThumbnails(); restorePlaybackState(); })();
+(async () => {
+  await savedLoad();
+  renderSavedList();
+  savedRefreshThumbnails();
+  var params = new URLSearchParams(window.location.search);
+  if (params.get('sc-native-test') === '1') {
+    var scItem = savedList.find(function(item) { return item.service === 'soundcloud'; });
+    if (scItem) {
+      console.log('SC native stream: dev query loading first saved item');
+      loadSavedItem(scItem);
+      return;
+    }
+    console.warn('SC native stream: dev query found no saved item');
+  }
+  restorePlaybackState();
+})();
 
 // Background thumbnail refresh for items saved before thumbnail support
 async function savedRefreshThumbnails() {
@@ -2184,13 +2646,13 @@ async function savedRefreshThumbnails() {
       var r = await fetch('/api/oembed?url=' + encodeURIComponent(item.url));
       if (r.ok) {
         var d = await r.json();
-        if (d.thumbnail_url && !item.thumbnail) { item.thumbnail = d.thumbnail_url; changed = true; }
+        if (d.thumbnail_url && !item.thumbnail) { item.thumbnail = localThumbUrl(d.thumbnail_url); changed = true; }
         if (d.title && item.title === item.url) { item.title = cleanTitle(d.title) || item.title; changed = true; }
       }
     } catch {}
     if (!item.thumbnail) {
       var vm = item.url.match(/(?:youtu\.be\/|[?&]v=)([^&#]+)/);
-      if (vm) { item.thumbnail = 'https://img.youtube.com/vi/' + vm[1] + '/mqdefault.jpg'; changed = true; }
+      if (vm) { item.thumbnail = localThumbUrl('https://img.youtube.com/vi/' + vm[1] + '/mqdefault.jpg'); changed = true; }
     }
   }
   if (changed) { savedSave(); renderSavedList(); }
@@ -2201,8 +2663,8 @@ async function savedRefreshThumbnails() {
 // resumes from approximately the same position.
 function savePlaybackState() {
   if (!currentSavedUrl) return;
-  var isPlaying = activePlayer === 0 ? ytPlaying : (activePlayer === 1 ? scIsPlaying : false);
-  var timeMs = activePlayer === 0 ? Math.round(ytTimeCurSec * 1000) : (activePlayer === 1 ? scTimeCurMs : 0);
+  var isPlaying = activePlayer === 0 ? ytPlaying : (activePlayer === 1 ? scIsPlaying : (activePlayer === 3 && nativeAudio ? !nativeAudio.paused : false));
+  var timeMs = activePlayer === 0 ? Math.round(ytTimeCurSec * 1000) : (activePlayer === 1 ? scTimeCurMs : (activePlayer === 3 && nativeAudio ? Math.round(nativeAudio.currentTime * 1000) : 0));
   try {
     localStorage.setItem('playback_resume', JSON.stringify({
       url: currentSavedUrl, was_playing: isPlaying, time_ms: timeMs
@@ -2223,11 +2685,23 @@ function restorePlaybackState() {
     renderSavedList();
     var ph = document.getElementById('sc-placeholder');
     if (ph) ph.classList.add('hidden');
-    scFrame.src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(scUrl) + '&color=%23fff500&auto_play=false&visual=true&show_comments=false&show_reposts=false&show_teaser=false';
-    scInitWidgetApi(function() { scBindWidget(scFrame); });
+    var restoredSc = { url: scUrl, service: 'soundcloud', title: scUrl };
+    setMediaTab(1);
+    barSetSC();
+    scFrame.src = 'about:blank';
+    scSetNativeVisual(restoredSc, null);
+    nativeReresolveAndPlay(restoredSc, false, true).then(function(ok) {
+      if (ok) console.log('SC native restore: stream ready via resolver');
+      else {
+        console.warn('SC native restore: resolver failed, falling back to widget');
+        scHideNativeVisual();
+        scFrame.src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(scUrl) + '&color=%23fff500&auto_play=false&visual=true&show_comments=false&show_reposts=false&show_teaser=false';
+        scInitWidgetApi(function() { scBindWidget(scFrame); });
+      }
+    });
     fetch('/api/oembed?url=' + encodeURIComponent(scUrl)).then(function(r) { return r.json(); }).then(function(d) {
       if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
-      if (d.thumbnail_url) { var a = document.getElementById('sc-art'); a.classList.remove('yt-icon'); a.style.background = ''; a.src = d.thumbnail_url; }
+      if (d.thumbnail_url) { var a = document.getElementById('sc-art'); a.classList.remove('yt-icon'); a.style.background = ''; a.src = localThumbUrl(d.thumbnail_url); scSetNativeVisual(restoredSc, { title: d.title, thumbnail: d.thumbnail_url }); }
     }).catch(function() {});
     return;
   }
@@ -2241,30 +2715,63 @@ function restorePlaybackState() {
 
   if (item.service === 'youtube') {
     setMediaTab(0);
-    var url = item.url;
-    var m1 = url.match(/youtu\.be\/([^?&#]+)/);
-    var m2 = url.match(/[?&]v=([^&#]+)/);
-    var m3 = url.match(/[?&]list=([^&#]+)/);
-    var vid = m1 ? m1[1] : (m2 ? m2[1] : null);
-    var src = '';
-    if (m3) src = 'https://www.youtube-nocookie.com/embed/videoseries?list=' + m3[1] + '&autoplay=1&enablejsapi=1';
-    else if (vid) src = 'https://www.youtube-nocookie.com/embed/' + vid + '?autoplay=1&enablejsapi=1' + (startSec > 5 ? '&start=' + startSec : '');
-    if (src) document.getElementById('yt-frame').src = src;
+    resetNativePlayback();
+    ytStarted = false;
+    var ytFrame = document.getElementById('yt-frame');
+    var src = youtubeEmbedUrl(item.url);
+    if (startSec > 5) src += '&start=' + startSec;
+    ytFrame.src = src;
+    ytShowPoster(item);
+    ytStartNativeVideo(item);
+    nativeReresolveAndPlay(item, false, true).then(function(ok) {
+      if (ok && nativeAudio && !nativeAudio.paused) {
+        var rd = nativeResolveCache[item.url];
+        if (rd && rd.thumbnail) { item.thumbnail = localThumbUrl(rd.thumbnail); ytShowPoster(item, item.thumbnail); savedSave(); renderSavedList(); }
+        console.log('YT native restore: stream playing via resolver');
+        ytCancelWatchdog();
+        setBarPlayPauseIcon(true);
+      } else if (ok) {
+        console.log('YT native restore: stream ready via resolver');
+        setBarPlayPauseIcon(false);
+      } else {
+        setTimeout(ytBindOfficialPlayer, 250);
+        setTimeout(ytSendListening, 1200);
+        ytStartWatchdog();
+      }
+    });
   } else if (item.service === 'soundcloud') {
     setMediaTab(1);
-    scFrame.src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(item.url) + '&color=%23fff500&auto_play=false&visual=true&show_comments=false&show_reposts=false&show_teaser=false';
-    scInitWidgetApi(function() {
-      scBindWidget(scFrame);
-      var seekDone = false;
-      scWidget.bind(SC.Widget.Events.READY, function() {
-        if (seekDone) return; seekDone = true;
-        if (startSec > 5) { try { scWidget.seekTo(state.time_ms - 3000); } catch(_) {} }
-        if (state.was_playing) { setTimeout(function() { try { scWidget.play(); } catch(_) {} }, 400); }
-      });
+    barSetSC();
+    scFrame.src = 'about:blank';
+    scSetNativeVisual(item, null);
+    nativeReresolveAndPlay(item, false, true).then(function(ok) {
+      if (ok) {
+        if (startSec > 5 && nativeAudio) {
+          var seekNative = function() { try { nativeAudio.currentTime = startSec; } catch(_) {} nativeAudio.removeEventListener('loadedmetadata', seekNative); };
+          nativeAudio.addEventListener('loadedmetadata', seekNative);
+        }
+        if (state.was_playing && nativeAudio) {
+          try { nativeAudio.play(); } catch(_) {}
+        }
+        console.log('SC native restore: stream ready via resolver');
+      } else {
+        console.warn('SC native restore: resolver failed, falling back to widget');
+        scHideNativeVisual();
+        scFrame.src = 'https://w.soundcloud.com/player/?url=' + encodeURIComponent(item.url) + '&color=%23fff500&auto_play=false&visual=true&show_comments=false&show_reposts=false&show_teaser=false';
+        scInitWidgetApi(function() {
+          scBindWidget(scFrame);
+          var seekDone = false;
+          scWidget.bind(SC.Widget.Events.READY, function() {
+            if (seekDone) return; seekDone = true;
+            if (startSec > 5) { try { scWidget.seekTo(state.time_ms - 3000); } catch(_) {} }
+            if (state.was_playing) { setTimeout(function() { try { scWidget.play(); } catch(_) {} }, 400); }
+          });
+        });
+      }
     });
     fetch('/api/oembed?url=' + encodeURIComponent(item.url)).then(function(r) { return r.json(); }).then(function(d) {
       if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
-      if (d.thumbnail_url) { var a = document.getElementById('sc-art'); a.classList.remove('yt-icon'); a.style.background = ''; a.src = d.thumbnail_url; }
+      if (d.thumbnail_url) { var a = document.getElementById('sc-art'); a.classList.remove('yt-icon'); a.style.background = ''; a.src = localThumbUrl(d.thumbnail_url); scSetNativeVisual(item, { title: d.title, thumbnail: d.thumbnail_url }); }
     }).catch(function() {});
   }
 }
