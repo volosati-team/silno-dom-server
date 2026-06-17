@@ -746,7 +746,21 @@ function ytAutoNext() {
 }
 
 var ytErrorCountdownTimer = null;
-function ytShowError() {
+function markSavedItemEmbedBlocked(item, reason) {
+  if (!item || item.service !== 'youtube') return;
+  item.embed_blocked = true;
+  item.embed_blocked_reason = reason || 'embed-error';
+  savedSave();
+  renderSavedList();
+}
+function markCurrentSavedEmbedBlocked(reason) {
+  if (!currentSavedUrl || !Array.isArray(savedList)) return;
+  var idx = savedList.findIndex(function(it) { return it && it.url === currentSavedUrl; });
+  if (idx < 0) return;
+  markSavedItemEmbedBlocked(savedList[idx], reason);
+}
+function ytShowError(reason) {
+  markCurrentSavedEmbedBlocked(reason || 'yt-error');
   if (ytErrorCountdownTimer) return;  // already showing
   var overlay = document.getElementById('yt-error-overlay');
   var cdEl = document.getElementById('yt-error-countdown');
@@ -780,7 +794,7 @@ function ytStartWatchdog() {
     ytWatchdogTimer = null;
     if (!ytPlaying) {
       console.warn('YT watchdog: no playback after 12s, showing error overlay');
-      ytShowError();
+      ytShowError('watchdog-timeout');
     }
   }, 12000);
 }
@@ -1127,13 +1141,13 @@ window.addEventListener('message', e => {
       if (d.info === 1) ytCancelWatchdog();  // playing — cancel watchdog
       if (d.info === 0) {
         if (ytStarted) ytAutoNext();
-        else ytShowError();
+        else ytShowError('ended-before-start');
       }
     }
     if (d.event === 'onError') {
       // Embed-restricted (101/150), removed/private (100), or other — show overlay + skip
       console.warn('YT embed error, code=' + d.info + ', showing error overlay');
-      ytShowError();
+      ytShowError('onError-' + d.info);
     }
     if (d.event === 'infoDelivery' && d.info) {
       // YT nocookie embed pipes playerState through infoDelivery.info
@@ -1149,7 +1163,7 @@ window.addEventListener('message', e => {
         if (d.info.playerState === 1) ytCancelWatchdog();  // playing
         if (d.info.playerState === 0) {
           if (ytStarted) ytAutoNext();
-          else ytShowError();
+          else ytShowError('ended-before-start');
         }
       }
       // YT sends title in videoData sub-object
@@ -1362,6 +1376,12 @@ function detectService(url) {
   return null;
 }
 
+function youtubeVideoId(url) {
+  var raw = url || '';
+  var m = raw.match(/[?&]v=([^&#]+)/) || raw.match(/youtu\.be\/([^?&#]+)/) || raw.match(/youtube\.com\/shorts\/([^?&#]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 async function fetchMeta(url) {
   try {
     const r = await fetch('/api/oembed?url=' + encodeURIComponent(url));
@@ -1442,12 +1462,16 @@ function renderSavedList() {
       const { cls, txt } = svcLabel(item.service);
       const safe = item.title.replace(/</g,'&lt;').replace(/>/g,'&gt;');
       const el = document.createElement('div');
-      el.className = 'saved-item' + (savedEditMode ? ' edit-mode' : '') + (item.reserve ? ' reserve' : '') + (item.url === currentSavedUrl ? ' active' : '');
+      el.className = 'saved-item' + (savedEditMode ? ' edit-mode' : '') + (item.reserve ? ' reserve' : '') + (item.embed_blocked ? ' embed-blocked' : '') + (item.url === currentSavedUrl ? ' active' : '');
       el.dataset.idx = i;
       const thumbSrc = item.thumbnail || '';
+      const blockedBadge = item.embed_blocked ? '<span class="saved-blocked-dot" title="YouTube embed blocked"></span>' : '';
       el.innerHTML = `
         <div class="saved-drag-h" title="Перетащить">⠿</div>
-        ${thumbSrc ? `<img class="saved-thumb" src="${thumbSrc}" onerror="savedThumbErr(this,'${cls}','${txt}')" alt="">` : `<div class="svc-ico ${cls}">${txt}</div>`}
+        <div class="saved-thumb-wrap">
+          ${thumbSrc ? `<img class="saved-thumb" src="${thumbSrc}" onerror="savedThumbErr(this,'${cls}','${txt}')" alt="">` : `<div class="svc-ico ${cls}">${txt}</div>`}
+          ${blockedBadge}
+        </div>
         <div class="saved-title">${safe}</div>
         <button class="saved-ren-btn" title="Переименовать"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
         <button class="saved-res-btn${item.reserve ? ' on' : ''}" title="Резерв">☆</button>
@@ -1898,6 +1922,7 @@ function loadSavedItem(item) {
   openMediaPanel();
   hideSavedPanel();
   currentSavedUrl = item.url;
+  applySavedEmbedProbe(item);
   renderSavedList();
   // Mirror highlight onto any matching search-result card so user sees
   // which result is currently playing.
@@ -2116,6 +2141,17 @@ function getProbeCache() {
 }
 function setProbeCache(c) {
   try { localStorage.setItem(YT_PROBE_CACHE_KEY, JSON.stringify(c)); } catch(_) {}
+}
+
+function applySavedEmbedProbe(item) {
+  if (!item || item.service !== 'youtube') return;
+  var vid = youtubeVideoId(item.url);
+  if (!vid) return;
+  var cache = getProbeCache();
+  var entry = cache[vid];
+  if (entry && (Date.now() - entry.t) < YT_PROBE_TTL_MS && entry.playable === false) {
+    markSavedItemEmbedBlocked(item, entry.r || 'probe-blocked');
+  }
 }
 
 function probeEmbeddable(vid, cardEl) {
