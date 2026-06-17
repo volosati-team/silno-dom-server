@@ -413,6 +413,27 @@
   <button id="sched-save" onclick="saveSchedule()">Сохранить</button>
 </div>
 
+<!-- DOORBELL OVERLAY -->
+<div id="doorbell-overlay">
+  <div id="doorbell-card">
+    <div id="doorbell-video-wrap">
+      <img id="doorbell-video" src="" alt="Видеозвонок">
+      <img id="doorbell-snapshot" src="" alt="Снимок гостя">
+      <div id="doorbell-video-fallback">Нет видео</div>
+    </div>
+    <div id="doorbell-info">
+      <div id="doorbell-kicker">Входной звонок</div>
+      <div id="doorbell-title">Кто-то у двери</div>
+      <div id="doorbell-meta">GATE</div>
+      <div id="doorbell-status">Звонок</div>
+      <div id="doorbell-actions">
+        <button id="doorbell-open" onclick="doorbellOpen()">Открыть</button>
+        <button id="doorbell-end" onclick="doorbellEnd()">Завершить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MENU -->
 <div id="overlay"></div>
 <nav id="menu">

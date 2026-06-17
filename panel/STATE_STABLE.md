@@ -467,3 +467,24 @@ bash start.sh
 
 - **#436** — whisper hook: parallel topic_loader + whisper_fallback дополнительныеContext колизия. Fix на ветке `fix/issue-436-whisper-topic-loader-merge`, коммит `204398c`. Ждёт мержа в main.
 - **#421** — moio-control CF Worker BACKEND устаревает при ротации cloudflared.
+
+---
+
+## Doorbell overlay integration — 2026-06-17 MSK
+
+Issue #12 on branch `dev/issue-12-doorbell-overlay` adds the Panel side of the GATE doorbell contract from `projects/silno-dom-gate/panel-doorbell-contract.md`.
+
+**Implemented:**
+- Same-origin proxy from Panel to GATE: `/api/door/*` forwards to `GATE_BACKEND` (default `http://127.0.0.1:8090`) and `/doorbell/*` streams media with `StreamingResponse` for MJPEG/snapshot paths.
+- Full-screen `#doorbell-overlay` above media/menu controls with MJPEG-first `<img>`, snapshot fallback, text fallback, recognition/source metadata, and `Open` / `End call` buttons.
+- Frontend polling for `/api/door/active` and `/api/door/events`; startup initializes the event cursor without replaying old rings, then uses active-session state for an already-open call.
+- On `doorbell.ring`, Panel pauses YouTube, SoundCloud widget, native audio, and BT state before showing the overlay.
+- `Open` calls `/api/door/open`; `End call` calls `/api/door/end`; `door.open.result` shows opened/denied/failed states and `doorbell.closed` auto-closes.
+- Existing light controls are not hidden permanently; overlay clears its image sources and session id on close.
+
+**Verified locally:**
+- `python3 -m py_compile panel/app.py projects/silno-dom-gate/fake_gate_service.py` passed.
+- `node --check panel/static/app.js` passed.
+- Smoke with fake GATE + Panel passed: demo ring through Panel proxy, active session, snapshot proxy, open command with `door.open.result` + `doorbell.closed`, and `/api/light/state` stayed routed to the light endpoint path.
+
+**Not verified in browser in this container:** `agent-browser` could not launch its bundled Chrome because the binary returned permission denied. Browser-level tablet verification still needs a real dev panel session.

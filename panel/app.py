@@ -43,6 +43,7 @@ from fastapi.responses import (
     PlainTextResponse,
     RedirectResponse,
     Response,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 
@@ -1003,6 +1004,87 @@ async def api_light_state():
         return json_response({"error": "redis_unreachable", "detail": str(exc)}, status=502)
     out = {ch: _parse_state_value(v) for ch, v in zip(LIGHT_CHANNELS, values)}
     return json_response(out)
+
+
+# ---------------------------------------------------------------------------
+# Doorbell proxy for /api/door/* and /doorbell/* — forwards to the GATE service
+# on port 8090 so the tablet can stay same-origin for commands and MJPEG media.
+# ---------------------------------------------------------------------------
+
+GATE_BACKEND = os.environ.get("GATE_BACKEND", "http://127.0.0.1:8090")
+
+
+@app.api_route(
+    "/api/door/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    include_in_schema=False,
+)
+async def fallthrough_door_api_proxy(path: str, request: Request):
+    target = f"{GATE_BACKEND}/api/door/{path}"
+    qs = request.url.query
+    if qs:
+        target = f"{target}?{qs}"
+    headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in ("host", "content-length")
+    }
+    body = await request.body()
+    try:
+        async with httpx.AsyncClient(timeout=15.0, trust_env=False) as client:
+            r = await client.request(request.method, target, headers=headers, content=body)
+    except Exception as exc:
+        return JSONResponse({"error": "gate_unreachable", "detail": str(exc)}, status_code=502)
+    resp_headers = {
+        k: v
+        for k, v in r.headers.items()
+        if k.lower() not in ("content-length", "transfer-encoding", "connection")
+    }
+    return Response(
+        content=r.content,
+        status_code=r.status_code,
+        headers=resp_headers,
+        media_type=r.headers.get("content-type"),
+    )
+
+
+@app.get("/doorbell/{path:path}", include_in_schema=False)
+async def fallthrough_doorbell_media_proxy(path: str, request: Request):
+    target = f"{GATE_BACKEND}/doorbell/{path}"
+    qs = request.url.query
+    if qs:
+        target = f"{target}?{qs}"
+    headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in ("host", "content-length")
+    }
+    client = httpx.AsyncClient(timeout=None, trust_env=False)
+    try:
+        upstream = await client.stream("GET", target, headers=headers).__aenter__()
+    except Exception as exc:
+        await client.aclose()
+        return JSONResponse({"error": "gate_media_unreachable", "detail": str(exc)}, status_code=502)
+
+    async def body_iter():
+        try:
+            async for chunk in upstream.aiter_bytes():
+                yield chunk
+        finally:
+            await upstream.aclose()
+            await client.aclose()
+
+    resp_headers = {
+        k: v
+        for k, v in upstream.headers.items()
+        if k.lower() not in ("content-length", "transfer-encoding", "connection")
+    }
+    return StreamingResponse(
+        body_iter(),
+        status_code=upstream.status_code,
+        headers=resp_headers,
+        media_type=upstream.headers.get("content-type"),
+    )
 
 
 # ---------------------------------------------------------------------------

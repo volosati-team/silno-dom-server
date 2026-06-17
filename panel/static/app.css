@@ -1131,6 +1131,128 @@ html, body {
   cursor: pointer;
 }
 
+/* ─── DOORBELL OVERLAY ───────────────────────────────────────────────────── */
+#doorbell-overlay {
+  display: none;
+  position: fixed; inset: 0;
+  z-index: 800;
+  background: rgba(0,0,0,0.94);
+  padding: 24px;
+  align-items: center;
+  justify-content: center;
+}
+#doorbell-overlay.show { display: flex; }
+#doorbell-card {
+  width: 100%; height: 100%; max-width: 1180px; max-height: 720px;
+  display: grid; grid-template-columns: minmax(0, 1fr) 310px;
+  gap: 18px;
+}
+#doorbell-video-wrap {
+  position: relative;
+  min-width: 0; min-height: 0;
+  border: 1px solid #fff50044;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #050505;
+  box-shadow: 0 0 60px rgba(255,245,0,0.08);
+}
+#doorbell-video,
+#doorbell-snapshot {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  background: #050505;
+}
+#doorbell-snapshot { display: none; }
+#doorbell-video-fallback {
+  position: absolute; inset: 0;
+  display: none;
+  align-items: center; justify-content: center;
+  color: var(--dim);
+  font-size: 26px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+#doorbell-video-wrap.fallback #doorbell-video,
+#doorbell-video-wrap.fallback #doorbell-snapshot { display: none; }
+#doorbell-video-wrap.snapshot #doorbell-video { display: none; }
+#doorbell-video-wrap.snapshot #doorbell-snapshot { display: block; }
+#doorbell-video-wrap.fallback #doorbell-video-fallback { display: flex; }
+#doorbell-info {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #0c0c1e;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+}
+#doorbell-kicker {
+  color: var(--yellow);
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 22px;
+}
+#doorbell-title {
+  color: #fff;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.12;
+}
+#doorbell-meta {
+  color: var(--muted);
+  font-size: 17px;
+  margin-top: 12px;
+  line-height: 1.35;
+}
+#doorbell-status {
+  margin-top: 22px;
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1.35;
+}
+#doorbell-actions {
+  margin-top: auto;
+  display: grid;
+  gap: 12px;
+}
+#doorbell-open,
+#doorbell-end {
+  height: 76px;
+  border-radius: 16px;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#doorbell-open {
+  background: var(--yellow);
+  color: #000;
+  border: none;
+}
+#doorbell-end {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--dim);
+}
+#doorbell-open:disabled,
+#doorbell-end:disabled { opacity: 0.35; }
+#doorbell-open:active,
+#doorbell-end:active { opacity: 0.75; }
+@media (max-width: 720px) {
+  #doorbell-overlay { padding: 12px; }
+  #doorbell-card { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto; gap: 12px; }
+  #doorbell-info { padding: 18px; }
+  #doorbell-title { font-size: 26px; }
+  #doorbell-meta { font-size: 14px; }
+  #doorbell-status { font-size: 18px; margin-top: 12px; }
+  #doorbell-actions { grid-template-columns: 1fr 1fr; margin-top: 16px; }
+  #doorbell-open,
+  #doorbell-end { height: 62px; font-size: 18px; }
+}
+
 /* ─── SLEEP BUTTON ───────────────────────────────────────────────────────── */
 #sleep-btn {
   flex-shrink: 0;

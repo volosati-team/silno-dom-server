@@ -64,6 +64,8 @@
   var QUIET_FETCH_PATTERNS = [
     /\/api\/light\/state(\?|$)/,
     /\/api\/dbg-log(\?|$)/,
+    /\/api\/door\/events(\?|$)/,
+    /\/api\/door\/active(\?|$)/,
   ];
   function isQuietFetch(url) {
     for (var i = 0; i < QUIET_FETCH_PATTERNS.length; i++) {
@@ -428,6 +430,186 @@ document.getElementById('menu-btn').addEventListener('click', () => menu.classLi
 overlay.addEventListener('click', closeMenu);
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
 
+// ── Doorbell overlay (GATE contract) ─────────────────────────────────────────
+var doorbellEventNext = 0;
+var doorbellSessionId = null;
+var doorbellCloseTimer = null;
+
+function doorbellEl(id) { return document.getElementById(id); }
+
+function doorbellSameOriginUrl(raw) {
+  if (!raw) return '';
+  try {
+    var u = new URL(raw, location.href);
+    if (u.pathname.indexOf('/doorbell/') === 0) return u.pathname + u.search;
+  } catch (_) {}
+  return raw;
+}
+
+function doorbellSetText(id, text) {
+  var el = doorbellEl(id);
+  if (el) el.textContent = text || '';
+}
+
+function doorbellStatus(text) { doorbellSetText('doorbell-status', text); }
+
+function doorbellScheduleClose(ms) {
+  if (doorbellCloseTimer) clearTimeout(doorbellCloseTimer);
+  doorbellCloseTimer = setTimeout(doorbellHide, ms || 1500);
+}
+
+function doorbellPauseMedia() {
+  try { pauseYT(); } catch (_) {}
+  try { if (scWidget) scWidget.pause(); } catch (_) {}
+  try { if (nativeAudio) nativeAudio.pause(); } catch (_) {}
+  try { btSetState(false); } catch (_) {}
+}
+
+function doorbellVideoFallback(snapshotUrl) {
+  var wrap = doorbellEl('doorbell-video-wrap');
+  var snap = doorbellEl('doorbell-snapshot');
+  if (!wrap) return;
+  if (snapshotUrl && snap && !wrap.classList.contains('snapshot')) {
+    snap.src = doorbellSameOriginUrl(snapshotUrl);
+    wrap.classList.add('snapshot');
+    wrap.classList.remove('fallback');
+  } else {
+    wrap.classList.add('fallback');
+    wrap.classList.remove('snapshot');
+  }
+}
+
+function doorbellRenderSession(session) {
+  if (!session) return;
+  doorbellSessionId = session.session_id;
+  doorbellPauseMedia();
+  var overlay = doorbellEl('doorbell-overlay');
+  var wrap = doorbellEl('doorbell-video-wrap');
+  var video = doorbellEl('doorbell-video');
+  var snap = doorbellEl('doorbell-snapshot');
+  var openBtn = doorbellEl('doorbell-open');
+  var endBtn = doorbellEl('doorbell-end');
+  var recognition = session.recognition || {};
+  var status = recognition.status || 'unknown';
+  var label = recognition.label || '';
+  var meta = (session.source || 'GATE') + ' · ' + status + (label ? ' · ' + label : '');
+  if (wrap) wrap.classList.remove('snapshot', 'fallback');
+  if (snap) snap.src = '';
+  if (video) {
+    video.onerror = function () { doorbellVideoFallback(session.snapshot_url); };
+    video.src = doorbellSameOriginUrl(session.video && session.video.url);
+    if (!video.src) doorbellVideoFallback(session.snapshot_url);
+  }
+  if (snap) snap.onerror = function () { doorbellVideoFallback(''); };
+  doorbellSetText('doorbell-meta', meta);
+  doorbellStatus('Звонок');
+  if (openBtn) { openBtn.disabled = !!(session.actions && session.actions.can_open === false); openBtn.textContent = 'Открыть'; }
+  if (endBtn) { endBtn.disabled = !!(session.actions && session.actions.can_end === false); endBtn.textContent = 'Завершить'; }
+  if (overlay) overlay.classList.add('show');
+  doorbellScheduleClose(120000);
+}
+
+function doorbellHide() {
+  var overlay = doorbellEl('doorbell-overlay');
+  var video = doorbellEl('doorbell-video');
+  var snap = doorbellEl('doorbell-snapshot');
+  if (doorbellCloseTimer) { clearTimeout(doorbellCloseTimer); doorbellCloseTimer = null; }
+  if (overlay) overlay.classList.remove('show');
+  if (video) { video.onerror = null; video.src = ''; }
+  if (snap) { snap.onerror = null; snap.src = ''; }
+  doorbellSessionId = null;
+}
+
+async function doorbellOpen() {
+  if (!doorbellSessionId) return;
+  var openBtn = doorbellEl('doorbell-open');
+  if (openBtn) openBtn.disabled = true;
+  doorbellStatus('Открываю...');
+  try {
+    var r = await fetch('/api/door/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: doorbellSessionId, requested_by: 'panel' })
+    });
+    var d = await r.json();
+    doorbellHandleEvent((d && d.event) || { type: 'door.open.result', session_id: doorbellSessionId, ok: r.ok, reason: r.ok ? 'opened' : 'failed' });
+  } catch (e) {
+    doorbellStatus('Не удалось открыть');
+    if (openBtn) openBtn.disabled = false;
+  }
+}
+
+async function doorbellEnd() {
+  if (!doorbellSessionId) { doorbellHide(); return; }
+  var endBtn = doorbellEl('doorbell-end');
+  if (endBtn) endBtn.disabled = true;
+  doorbellStatus('Завершаю...');
+  try {
+    var sid = doorbellSessionId;
+    var r = await fetch('/api/door/end', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sid, reason: 'operator_end' })
+    });
+    var d = await r.json();
+    doorbellHandleEvent((d && d.event) || { type: 'doorbell.closed', session_id: sid, reason: r.ok ? 'operator_end' : 'failed' });
+  } catch (e) {
+    doorbellStatus('Не удалось завершить');
+    if (endBtn) endBtn.disabled = false;
+  }
+}
+
+function doorbellHandleEvent(ev) {
+  if (!ev || !ev.type) return;
+  if (ev.type === 'doorbell.ring') {
+    doorbellRenderSession(ev);
+    return;
+  }
+  if (ev.session_id && doorbellSessionId && ev.session_id !== doorbellSessionId) return;
+  if (ev.type === 'door.open.result') {
+    var openBtn = doorbellEl('doorbell-open');
+    if (openBtn) openBtn.disabled = false;
+    if (ev.ok) doorbellStatus('Открыто');
+    else if (ev.reason === 'policy_denied' || ev.reason === 'denied') doorbellStatus('Отказано');
+    else doorbellStatus('Не открылось: ' + (ev.reason || 'ошибка'));
+    if (ev.ok) doorbellScheduleClose(1800);
+    return;
+  }
+  if (ev.type === 'doorbell.closed') {
+    doorbellStatus(ev.reason === 'opened' ? 'Открыто' : 'Звонок завершён');
+    doorbellScheduleClose(900);
+  }
+}
+
+async function doorbellPollActive() {
+  try {
+    var r = await fetch('/api/door/active');
+    if (!r.ok) return;
+    var d = await r.json();
+    if (d && d.active && d.session && !doorbellSessionId) doorbellRenderSession(d.session);
+  } catch (_) {}
+}
+
+async function doorbellPollEvents(handleEvents) {
+  if (typeof handleEvents === 'undefined') handleEvents = true;
+  try {
+    var r = await fetch('/api/door/events?since=' + encodeURIComponent(doorbellEventNext));
+    if (!r.ok) return;
+    var d = await r.json();
+    var events = (d && d.events) || [];
+    if (typeof d.next === 'number') doorbellEventNext = d.next;
+    if (!handleEvents) return;
+    for (var i = 0; i < events.length; i++) doorbellHandleEvent(events[i]);
+  } catch (_) {}
+}
+
+function doorbellInit() {
+  doorbellPollActive();
+  doorbellPollEvents(false);
+  setInterval(doorbellPollEvents, 1500);
+  setInterval(doorbellPollActive, 10000);
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 updateMenu();
 
@@ -453,6 +635,7 @@ requestAnimationFrame(function() { requestAnimationFrame(function() {
 
 pollState();
 setInterval(pollState, 5000);
+doorbellInit();
 
 // Insert hidden <audio> shim ahead of any user interaction so the very first
 // click can resolve+play in one gesture chain (mobile autoplay policy).
