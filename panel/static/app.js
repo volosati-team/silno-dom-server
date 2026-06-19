@@ -733,33 +733,107 @@ function scToggleLikes() {
   scLikesBtn.classList.toggle('on', scLikesOpen);
 }
 
+function scTitleParts(rawTitle, artistHint) {
+  var title = cleanTitle(rawTitle || '') || 'SoundCloud';
+  var artist = (artistHint || '').trim();
+  var m = title.match(/^(.+?)\s+[—–-]\s+(.+)$/);
+  if (m) {
+    artist = m[1].trim();
+    title = m[2].trim();
+  }
+  return { artist: artist, title: title };
+}
+function scSetScrollingText(el, text) {
+  if (!el) return;
+  el.classList.remove('scroll');
+  el.style.removeProperty('--sc-scroll-x');
+  el.textContent = text || '—';
+  setTimeout(function() {
+    if (!el || el.scrollWidth <= el.clientWidth + 8) return;
+    var span = document.createElement('span');
+    span.textContent = text || '—';
+    el.textContent = '';
+    el.appendChild(span);
+    el.style.setProperty('--sc-scroll-x', '-' + Math.ceil(el.scrollWidth - el.clientWidth + 48) + 'px');
+    el.classList.add('scroll');
+  }, 0);
+}
+function scFallbackLabel(parts) {
+  var raw = (parts.artist || parts.title || 'SoundCloud').replace(/[()\[\]{}]/g, ' ').trim();
+  var words = raw.split(/\s+/).filter(Boolean);
+  if (!words.length) return 'SC';
+  var label = words.slice(0, 2).map(function(w) { return w.charAt(0); }).join('').toUpperCase();
+  return label || 'SC';
+}
+function scFallbackArtData(parts) {
+  var label = scFallbackLabel(parts);
+  var title = (parts.title || 'SoundCloud').replace(/[<>&"]/g, function(ch) { return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[ch]; });
+  var artist = (parts.artist || '').replace(/[<>&"]/g, function(ch) { return {'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[ch]; });
+  var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">' +
+    '<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#ff6a1a"/><stop offset="0.48" stop-color="#7a2cff"/><stop offset="1" stop-color="#05050a"/></linearGradient><radialGradient id="r" cx="35%" cy="28%" r="60%"><stop stop-color="rgba(255,255,255,0.42)"/><stop offset="1" stop-color="rgba(255,255,255,0)"/></radialGradient></defs>' +
+    '<rect width="800" height="800" fill="url(#g)"/><rect width="800" height="800" fill="url(#r)"/>' +
+    '<circle cx="640" cy="130" r="190" fill="rgba(255,255,255,0.12)"/><circle cx="95" cy="690" r="230" fill="rgba(0,0,0,0.22)"/>' +
+    '<text x="72" y="418" font-family="Inter,Arial,sans-serif" font-size="178" font-weight="800" fill="#fff" letter-spacing="-8">' + label + '</text>' +
+    '<text x="78" y="575" font-family="Inter,Arial,sans-serif" font-size="40" font-weight="700" fill="rgba(255,255,255,0.92)">SoundCloud</text>' +
+    '<text x="78" y="635" font-family="Inter,Arial,sans-serif" font-size="28" fill="rgba(255,255,255,0.72)">' + artist.slice(0, 34) + '</text>' +
+    '<text x="78" y="680" font-family="Inter,Arial,sans-serif" font-size="24" fill="rgba(255,255,255,0.58)">' + title.slice(0, 42) + '</text></svg>';
+  return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(svg);
+}
+function scFallbackBg() {
+  return 'radial-gradient(circle at 28% 20%, rgba(255,106,26,0.7), transparent 34%), radial-gradient(circle at 70% 32%, rgba(122,44,255,0.42), transparent 36%), linear-gradient(135deg, #05050a, #241018 52%, #080813)';
+}
+function scUseFallbackArt(img, parts) {
+  if (!img) return;
+  img.onerror = null;
+  img.classList.add('sc-fallback');
+  img.src = scFallbackArtData(parts || { title: 'SoundCloud', artist: '' });
+}
+function scLoadArtwork(img, src, parts) {
+  if (!img) return;
+  img.classList.remove('sc-fallback', 'yt-icon');
+  img.style.background = '';
+  if (!src) { scUseFallbackArt(img, parts); return; }
+  img.onerror = function() { scUseFallbackArt(img, parts); };
+  img.src = localThumbUrl(src);
+}
+function scApplyTrackMeta(rawTitle, artistHint, thumb) {
+  var parts = scTitleParts(rawTitle, artistHint);
+  scSetScrollingText(document.getElementById('sc-track-title'), parts.title);
+  var artistEl = document.getElementById('sc-track-artist');
+  if (artistEl) artistEl.textContent = parts.artist || '';
+  scLoadArtwork(document.getElementById('sc-art'), thumb, parts);
+  return parts;
+}
+
 function scUpdateTrackInfo(sound) {
   if (!sound) return;
-  document.getElementById('sc-track-title').textContent  = sound.title || '—';
-  document.getElementById('sc-track-artist').textContent = (sound.user || {}).username || '';
-  const art = sound.artwork_url || '';
-  if (art) document.getElementById('sc-art').src = art.replace('-large', '-t50x50');
+  scApplyTrackMeta(sound.title || '—', (sound.user || {}).username || '', sound.artwork_url || '');
 }
 
 function scSetNativeVisual(item, data) {
   var wrap = document.getElementById('sc-frame-wrap');
   if (wrap) wrap.classList.add('native');
   var title = (data && data.title) || (item && item.title) || 'SoundCloud';
-  var thumb = (data && data.thumbnail) || (item && item.thumbnail) || '';
+  var artist = (data && (data.uploader || data.channel || data.artist)) || (item && (item.uploader || item.channel || item.artist || item.user)) || '';
+  var thumb = (data && (data.thumbnail || data.thumbnail_url)) || (item && item.thumbnail) || '';
   var titleEl = document.getElementById('sc-native-title');
   var subEl = document.getElementById('sc-native-sub');
   var img = document.getElementById('sc-native-art');
   var visual = document.getElementById('sc-native-visual');
-  if (titleEl) titleEl.textContent = cleanTitle(title);
-  if (subEl) subEl.textContent = 'native stream';
-  if (visual) visual.classList.add('paused');
-  if (img) {
+  var parts = scTitleParts(title, artist);
+  scSetScrollingText(titleEl, parts.title);
+  if (subEl) subEl.textContent = parts.artist || '';
+  if (visual) {
+    visual.classList.add('paused');
     if (thumb) {
-      img.src = localThumbUrl(thumb);
+      visual.classList.remove('fallback');
+      visual.style.setProperty('--sc-native-bg', 'url("' + localThumbUrl(thumb).replace(/"/g, '%22') + '")');
     } else {
-      img.removeAttribute('src');
+      visual.classList.add('fallback');
+      visual.style.setProperty('--sc-native-bg', scFallbackBg());
     }
   }
+  scLoadArtwork(img, thumb, parts);
 }
 function scHideNativeVisual() {
   var wrap = document.getElementById('sc-frame-wrap');
@@ -783,7 +857,7 @@ function scQueueTitle(item) {
   return cleanTitle((item && item.title) || (item && item.name) || (item && item.url) || 'SoundCloud');
 }
 function scQueueSub(item) {
-  return (item && (item.uploader || item.channel || item.artist || item.user || item.service)) || 'SoundCloud';
+  return (item && (item.uploader || item.channel || item.artist || item.user)) || '';
 }
 function scClearQueue() {
   var nowTitle = document.getElementById('sc-queue-now-title');
@@ -791,7 +865,7 @@ function scClearQueue() {
   var list = document.getElementById('sc-up-next-list');
   var empty = document.getElementById('sc-up-next-empty');
   if (nowTitle) nowTitle.textContent = '—';
-  if (nowSub) nowSub.textContent = 'SoundCloud';
+  if (nowSub) nowSub.textContent = '';
   if (list) list.innerHTML = '';
   if (empty) { empty.textContent = 'Следующие треки появятся после загрузки плейлиста'; empty.style.display = ''; }
 }
@@ -1319,6 +1393,7 @@ async function nativePlayPlaylistIndex(idx, opts) {
     var handoffAudio = ensureNativeAudio();
     handoffAudio._scIgnoreEndedUntil = Date.now() + 2500;
   }
+  if (opts.manual) nativeSwitchingUntil = Date.now() + 2500;
   if (!nativeCurrent || !nativeCurrent.playlist_items) return;
   if (idx < 0 || idx >= nativeCurrent.playlist_items.length) return;
   var entry = nativeCurrent.playlist_items[idx];
@@ -1350,18 +1425,7 @@ async function nativePlayPlaylistIndex(idx, opts) {
     nativeCurrent.user_paused = false;
     var title = d.title || entry.title || '';
     var thumb = d.thumbnail || entry.thumbnail || '';
-    var titleEl = document.getElementById('sc-track-title');
-    if (titleEl) titleEl.textContent = cleanTitle(title);
-    var artistEl = document.getElementById('sc-track-artist');
-    if (artistEl) artistEl.textContent = d.uploader || d.channel || entry.uploader || entry.artist || '';
-    if (thumb) {
-      var art = document.getElementById('sc-art');
-      if (art) {
-        art.classList.remove('yt-icon');
-        art.style.background = '';
-        art.src = localThumbUrl(thumb);
-      }
-    }
+    scApplyTrackMeta(title, d.uploader || d.channel || entry.uploader || entry.artist || '', thumb);
     scRenderQueue();
     nativePrefetchPlaylistIndex(idx + 1);
     if (service === 'youtube') {
@@ -2118,6 +2182,7 @@ let nativeResolveCache = {};
 let nativeResolvePollTimer = null;
 let nativePreloadAudio = null;
 let nativePrefetchInFlight = {};
+let nativeSwitchingUntil = 0;
 
 var ICON_PLAY  = '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
 var ICON_PAUSE = '<svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
@@ -2166,6 +2231,7 @@ function ensureNativeAudio() {
       if (curEl) curEl.textContent = scFmtTime(cur * 1000);
       if (durEl) durEl.textContent = scFmtTime(dur * 1000);
       if (!nativeAudio._scPreEndAdvance && dur - cur > 0 && dur - cur <= 1.2 && nativeCurrent && nativeCurrent.playlist_items && nativeCurrent.playlist_idx + 1 < nativeCurrent.playlist_items.length) {
+        if (Date.now() < nativeSwitchingUntil) return;
         nativeAudio._scPreEndAdvance = true;
         console.log('SC native pre-end handoff idx=' + (nativeCurrent.playlist_idx + 1));
         nativePlayPlaylistIndex(nativeCurrent.playlist_idx + 1, { handoff: true });
@@ -2190,6 +2256,10 @@ function ensureNativeAudio() {
   nativeAudio.addEventListener('ended', function() {
     console.log('native: ended');
     if (activePlayer === 3) setBarPlayPauseIcon(false);
+    if (Date.now() < nativeSwitchingUntil) {
+      console.log('native: ended ignored during manual switch');
+      return;
+    }
     if (nativeAudio._scPreEndAdvance || (nativeAudio._scIgnoreEndedUntil && Date.now() < nativeAudio._scIgnoreEndedUntil)) {
       console.log('native: ended ignored after pre-end handoff');
       return;
@@ -2414,7 +2484,7 @@ function nativeApplyResolvedStream(item, d, respectPauseState) {
   };
   scRenderQueue();
   nativePrefetchPlaylistIndex(1);
-  if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
+  scApplyTrackMeta(d.title || item.title || '', d.uploader || d.channel || item.uploader || item.artist || '', d.thumbnail || item.thumbnail || '');
   if (d.thumbnail) {
     var art = document.getElementById('sc-art');
     if (art) {
@@ -2555,7 +2625,7 @@ async function nativeReresolveAndPlay(item, isRetry, respectPauseState) {
     };
     scRenderQueue();
     nativePrefetchPlaylistIndex(1);
-    if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
+    scApplyTrackMeta(d.title || item.title || '', d.uploader || d.channel || item.uploader || item.artist || '', d.thumbnail || item.thumbnail || '');
     if (d.thumbnail) {
       var art = document.getElementById('sc-art');
       if (art) {
@@ -2656,10 +2726,7 @@ function applySavedItemBarPreview(item) {
   // doesn't keep the previous item's image while async resolve runs.
   // Async paths overwrite later with real metadata when it arrives.
   var art = document.getElementById('sc-art');
-  var titleEl = document.getElementById('sc-track-title');
-  var artistEl = document.getElementById('sc-track-artist');
-  if (titleEl) titleEl.textContent = cleanTitle(item.title || '');
-  if (artistEl) artistEl.textContent = '';
+  scApplyTrackMeta(item.title || '', item.uploader || item.channel || item.artist || '', item.thumbnail || '');
   if (!art) return;
   // reset
   art.classList.remove('yt-icon');
@@ -3241,8 +3308,8 @@ function restorePlaybackState() {
       }
     });
     fetch('/api/oembed?url=' + encodeURIComponent(scUrl)).then(function(r) { return r.json(); }).then(function(d) {
-      if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
-      if (d.thumbnail_url) { var a = document.getElementById('sc-art'); a.classList.remove('yt-icon'); a.style.background = ''; a.src = localThumbUrl(d.thumbnail_url); scSetNativeVisual(restoredSc, { title: d.title, thumbnail: d.thumbnail_url }); }
+      scApplyTrackMeta(d.title || scUrl, d.author_name || d.author || '', d.thumbnail_url || '');
+      if (d.thumbnail_url) scSetNativeVisual(restoredSc, { title: d.title, thumbnail: d.thumbnail_url, uploader: d.author_name || d.author || '' });
     }).catch(function() {});
     return;
   }
@@ -3311,8 +3378,8 @@ function restorePlaybackState() {
       }
     });
     fetch('/api/oembed?url=' + encodeURIComponent(item.url)).then(function(r) { return r.json(); }).then(function(d) {
-      if (d.title) document.getElementById('sc-track-title').textContent = cleanTitle(d.title);
-      if (d.thumbnail_url) { var a = document.getElementById('sc-art'); a.classList.remove('yt-icon'); a.style.background = ''; a.src = localThumbUrl(d.thumbnail_url); scSetNativeVisual(item, { title: d.title, thumbnail: d.thumbnail_url }); }
+      scApplyTrackMeta(d.title || item.title || '', d.author_name || d.author || item.uploader || item.artist || '', d.thumbnail_url || item.thumbnail || '');
+      if (d.thumbnail_url) scSetNativeVisual(item, { title: d.title, thumbnail: d.thumbnail_url, uploader: d.author_name || d.author || '' });
     }).catch(function() {});
   }
 }
