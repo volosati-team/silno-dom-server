@@ -741,6 +741,7 @@ function scTitleParts(rawTitle, artistHint) {
     artist = m[1].trim();
     title = m[2].trim();
   }
+  if (/^soundcloud$/i.test(artist)) artist = '';
   return { artist: artist, title: title };
 }
 function scSetScrollingText(el, text) {
@@ -796,12 +797,40 @@ function scLoadArtwork(img, src, parts) {
   img.onerror = function() { scUseFallbackArt(img, parts); };
   img.src = localThumbUrl(src);
 }
-function scApplyTrackMeta(rawTitle, artistHint, thumb) {
+function scMetaDebugVisible() {
+  var ov = document.getElementById('meta-debug-overlay');
+  return !!(ov && !ov.classList.contains('hidden'));
+}
+function hideMetaDebug() {
+  var ov = document.getElementById('meta-debug-overlay');
+  if (ov) ov.classList.add('hidden');
+}
+function showMetaDebug(data) {
+  var ov = document.getElementById('meta-debug-overlay');
+  var pre = document.getElementById('meta-debug-json');
+  if (!ov || !pre) return;
+  if (arguments.length) pre.textContent = JSON.stringify(data || {}, null, 2);
+  ov.classList.remove('hidden');
+}
+function updateMetaDebug(data) {
+  var pre = document.getElementById('meta-debug-json');
+  if (pre) pre.textContent = JSON.stringify(data || {}, null, 2);
+}
+function scApplyTrackMeta(rawTitle, artistHint, thumb, debugSource) {
   var parts = scTitleParts(rawTitle, artistHint);
   scSetScrollingText(document.getElementById('sc-track-title'), parts.title);
   var artistEl = document.getElementById('sc-track-artist');
   if (artistEl) artistEl.textContent = parts.artist || '';
   scLoadArtwork(document.getElementById('sc-art'), thumb, parts);
+  updateMetaDebug({
+    source: debugSource || 'track-meta',
+    title: parts.title,
+    artist: parts.artist || '',
+    album: '',
+    artwork_candidates: thumb ? [{ kind: 'track', url: thumb }] : [],
+    chosen_artwork: thumb || '',
+    fallback_reason: thumb ? '' : 'no real media image'
+  });
   return parts;
 }
 
@@ -914,7 +943,9 @@ function scFmtTime(ms) {
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
 }
 
-let scShuffleOn = false, scRepeatOn = false;
+const LOOP_MODES = ['all', 'one', 'off'];
+let scShuffleOn = false, loopMode = 'all';
+let savedPlayHistory = [];
 function safeWidgetCall(fnName, arg) {
   if (!scWidget || typeof scWidget[fnName] !== 'function') return;
   try { scWidget[fnName](arg); } catch(e) { console.warn('SC ' + fnName + ' threw:', e && e.message); }
@@ -923,6 +954,31 @@ function scToggleShuffle() {
   scShuffleOn = !scShuffleOn;
   document.getElementById('sc-shuffle').classList.toggle('on', scShuffleOn);
   safeWidgetCall('setShuffle', scShuffleOn);
+}
+function renderLoopMode() {
+  var btn = document.getElementById('sc-repeat');
+  if (!btn) return;
+  btn.classList.toggle('on', loopMode !== 'off');
+  var icon = btn.querySelector('.material-symbols-outlined');
+  if (icon) icon.textContent = loopMode === 'one' ? 'repeat_one' : 'repeat';
+  btn.title = loopMode === 'all' ? 'Loop all' : (loopMode === 'one' ? 'Loop one' : 'Loop off');
+  btn.setAttribute('aria-label', btn.title);
+}
+async function playerStateLoad() {
+  try {
+    var r = await fetch('/api/player-state');
+    if (!r.ok) return renderLoopMode();
+    var state = await r.json();
+    if (LOOP_MODES.includes(state.loopMode)) loopMode = state.loopMode;
+  } catch(e) {}
+  renderLoopMode();
+}
+function playerStateSave() {
+  fetch('/api/player-state', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ loopMode: loopMode })
+  }).catch(function(e) { console.warn('player-state save failed:', e && e.message); });
 }
 function scSetVolume(val) { if (scWidget) scWidget.setVolume(parseInt(val)); }
 function scVolSetActual(val) {
@@ -963,9 +1019,56 @@ document.getElementById('sc-vol').addEventListener('input', function(e) {
 });
 
 function scToggleRepeat() {
-  scRepeatOn = !scRepeatOn;
-  document.getElementById('sc-repeat').classList.toggle('on', scRepeatOn);
-  safeWidgetCall('setRepeat', scRepeatOn);
+  var i = LOOP_MODES.indexOf(loopMode);
+  loopMode = LOOP_MODES[(i + 1) % LOOP_MODES.length];
+  renderLoopMode();
+  playerStateSave();
+  safeWidgetCall('setRepeat', loopMode === 'one');
+}
+function currentSavedIndex() {
+  if (typeof savedList === 'undefined' || !savedList.length || !currentSavedUrl) return -1;
+  return savedList.findIndex(function(it) { return it.url === currentSavedUrl; });
+}
+function rememberSavedPlay(idx) {
+  if (idx < 0) return;
+  savedPlayHistory = savedPlayHistory.filter(function(x) { return x !== idx; });
+  savedPlayHistory.push(idx);
+  var max = Math.max(1, Math.ceil(savedList.length * 0.8));
+  if (savedPlayHistory.length > max) savedPlayHistory = savedPlayHistory.slice(-max);
+}
+function chooseNextSavedIndex() {
+  if (typeof savedList === 'undefined' || !savedList.length) return -1;
+  var idx = currentSavedIndex();
+  if (idx >= 0) rememberSavedPlay(idx);
+  if (loopMode === 'one' && idx >= 0) return idx;
+  if (scShuffleOn && savedList.length > 1) {
+    var hold = Math.max(1, Math.floor(savedList.length * 0.8));
+    var blocked = savedPlayHistory.slice(-hold);
+    var pool = savedList.map(function(_, i) { return i; }).filter(function(i) { return i !== idx && blocked.indexOf(i) < 0; });
+    if (!pool.length) pool = savedList.map(function(_, i) { return i; }).filter(function(i) { return i !== idx; });
+    if (pool.length) return pool[Math.floor(Math.random() * pool.length)];
+  }
+  if (idx >= 0 && idx + 1 < savedList.length) return idx + 1;
+  return loopMode === 'all' ? 0 : -1;
+}
+function playSavedIndex(idx) {
+  if (idx < 0 || typeof savedList === 'undefined' || !savedList[idx]) return false;
+  rememberSavedPlay(idx);
+  loadSavedItem(savedList[idx]);
+  return true;
+}
+function handleMediaFinish() {
+  if (loopMode === 'one') {
+    if (activePlayer === 3 && nativeAudio) { nativeAudio.currentTime = 0; nativeRequestPlay(nativeAudio, 'loop one'); return true; }
+    if (activePlayer === 0) { ytCmd('seekTo', [0, true]); ytCmd('playVideo'); return true; }
+    if (activePlayer === 1 && scWidget) { try { scWidget.seekTo(0); scWidget.play(); return true; } catch(e) {} }
+  }
+  if (playSavedIndex(chooseNextSavedIndex())) return true;
+  if (loopMode === 'all') {
+    if (activePlayer === 0) { ytCmd('nextVideo'); return true; }
+    if (activePlayer === 1 && scWidget) { try { scWidget.next(); return true; } catch(e) {} }
+  }
+  return false;
 }
 
 function scBindWidget(frame) {
@@ -979,7 +1082,7 @@ function scBindWidget(frame) {
     scWidget.getCurrentSound(scUpdateTrackInfo);
     scWidget.getDuration(d => { tDur.textContent = scFmtTime(d); });
     if (scShuffleOn) safeWidgetCall('setShuffle', true);
-    if (scRepeatOn)  safeWidgetCall('setRepeat', true);
+    safeWidgetCall('setRepeat', loopMode === 'one');
   });
   scWidget.bind(SC.Widget.Events.PLAY, () => {
     scIsPlaying = true;
@@ -998,6 +1101,7 @@ function scBindWidget(frame) {
     scIsPlaying = false;
     console.warn('SC event FINISH');
     setBarPlayPauseIcon(false); fill.style.width = '0%'; tCur.textContent = '0:00';
+    handleMediaFinish();
   });
   scWidget.bind(SC.Widget.Events.PLAY_PROGRESS, e => {
     scTimeCurMs = e.currentPosition;
@@ -1069,7 +1173,7 @@ function ytAutoNext() {
   if (ytAutoNextTimer) return;
   ytAutoNextTimer = setTimeout(function() {
     ytAutoNextTimer = null;
-    scNext();
+    handleMediaFinish();
   }, 600);
 }
 
@@ -1327,28 +1431,20 @@ function scPrev() {
 function scNext() {
   console.log('scNext: activePlayer=' + activePlayer + ' scWidget=' + (scWidget ? 'ok' : 'null'));
   if (activePlayer === 3) {
-    // Walk forward inside the resolved playlist first; fall through to
-    // next saved-list entry once playlist is exhausted.
     if (nativeCurrent && nativeCurrent.playlist_items && nativeCurrent.playlist_idx + 1 < nativeCurrent.playlist_items.length) {
       nativePrimeCurrentAudioForGesture('next');
       nativePlayPlaylistIndex(nativeCurrent.playlist_idx + 1, { manual: true });
       return;
     }
-    var idx = nativeSavedIndex();
-    if (idx >= 0 && idx + 1 < savedList.length) { loadSavedItem(savedList[idx + 1]); return; }
-    if (savedList.length > 0) loadSavedItem(savedList[0]); // wrap to first
+    if (playSavedIndex(chooseNextSavedIndex())) return;
     return;
   }
   if (activePlayer === 0) {
-    var idx = nativeSavedIndex();
-    if (idx >= 0 && idx + 1 < savedList.length) { loadSavedItem(savedList[idx + 1]); return; }
-    if (savedList.length > 0) { loadSavedItem(savedList[0]); return; } // wrap to first
+    if (playSavedIndex(chooseNextSavedIndex())) return;
     ytCmd('nextVideo');
   }
   else if (scWidget) {
-    var idx = nativeSavedIndex();
-    if (idx >= 0 && idx + 1 < savedList.length) { loadSavedItem(savedList[idx + 1]); return; }
-    if (savedList.length > 0) { loadSavedItem(savedList[0]); return; } // wrap to first
+    if (playSavedIndex(chooseNextSavedIndex())) return;
     scWidget.next();
   }
   else console.warn('scNext: no handler');
@@ -2230,7 +2326,7 @@ function ensureNativeAudio() {
       var durEl = document.getElementById('sc-time-dur');
       if (curEl) curEl.textContent = scFmtTime(cur * 1000);
       if (durEl) durEl.textContent = scFmtTime(dur * 1000);
-      if (!nativeAudio._scPreEndAdvance && dur - cur > 0 && dur - cur <= 1.2 && nativeCurrent && nativeCurrent.playlist_items && nativeCurrent.playlist_idx + 1 < nativeCurrent.playlist_items.length) {
+      if (loopMode !== 'one' && !nativeAudio._scPreEndAdvance && dur - cur > 0 && dur - cur <= 1.2 && nativeCurrent && nativeCurrent.playlist_items && nativeCurrent.playlist_idx + 1 < nativeCurrent.playlist_items.length) {
         if (Date.now() < nativeSwitchingUntil) return;
         nativeAudio._scPreEndAdvance = true;
         console.log('SC native pre-end handoff idx=' + (nativeCurrent.playlist_idx + 1));
@@ -2264,21 +2360,18 @@ function ensureNativeAudio() {
       console.log('native: ended ignored after pre-end handoff');
       return;
     }
-    // 1) Walk forward inside the resolved playlist if there are still
-    //    unplayed items.
+    if (loopMode === 'one') {
+      console.log('native: loop one restart');
+      nativeAudio.currentTime = 0;
+      nativeRequestPlay(nativeAudio, 'loop one');
+      return;
+    }
     if (nativeCurrent && nativeCurrent.playlist_items && nativeCurrent.playlist_idx + 1 < nativeCurrent.playlist_items.length) {
       console.log('native: advancing inside playlist to idx=' + (nativeCurrent.playlist_idx + 1));
       nativePlayPlaylistIndex(nativeCurrent.playlist_idx + 1);
       return;
     }
-    // 2) Otherwise jump to the next saved-list entry.
-    if (typeof savedList !== 'undefined' && savedList.length && currentSavedUrl) {
-      var idx = savedList.findIndex(function(it) { return it.url === currentSavedUrl; });
-      if (idx >= 0 && idx + 1 < savedList.length) {
-        console.log('native: advancing to next saved item idx=' + (idx + 1));
-        loadSavedItem(savedList[idx + 1]);
-      }
-    }
+    if (playSavedIndex(chooseNextSavedIndex())) return;
   });
   return nativeAudio;
 }
@@ -3228,6 +3321,7 @@ scUpdateAccountsMenu();
 
 // Saved playlists init
 (async () => {
+  await playerStateLoad();
   await savedLoad();
   renderSavedList();
   savedRefreshThumbnails();

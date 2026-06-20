@@ -842,10 +842,34 @@ html, body {
   font-size: 20px; color: var(--muted); flex-shrink: 0;
   font-variant-numeric: tabular-nums; letter-spacing: 0.03em; min-width: 52px; text-align: center;
 }
+#sc-art-wrap { position: relative; width: 72px; height: 72px; flex-shrink: 0; }
 #sc-art {
   width: 72px; height: 72px; border-radius: 6px;
-  background: var(--dim); flex-shrink: 0; object-fit: cover;
+  background: var(--dim); object-fit: cover;
 }
+#meta-debug-open {
+  position: absolute; right: 4px; bottom: 4px;
+  width: 20px; height: 20px; border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 50%; background: rgba(0,0,0,0.55); color: #fff;
+  font: 12px/18px system-ui, sans-serif; padding: 0;
+}
+#meta-debug-overlay {
+  position: absolute; right: 0; bottom: calc(100% + 8px);
+  width: min(560px, 80vw); max-height: 52vh; overflow: auto;
+  background: rgba(0,0,0,0.82); border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 10px; color: #f5f5f5; z-index: 460;
+  box-shadow: 0 18px 55px rgba(0,0,0,0.45); backdrop-filter: blur(8px);
+}
+#meta-debug-overlay.hidden { display: none; }
+#meta-debug-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 10px; border-bottom: 1px solid rgba(255,255,255,0.14);
+  font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+}
+#meta-debug-close {
+  border: 0; background: transparent; color: #fff; font-size: 20px; line-height: 1; padding: 0 2px;
+}
+#meta-debug-json { margin: 0; padding: 10px; font: 12px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
 #sc-track-info { flex: 1; min-width: 0; }
 #sc-track-title { font-size: 24px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #sc-track-artist { font-size: 20px; color: var(--muted); letter-spacing: 0.04em; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -858,6 +882,10 @@ html, body {
 }
 .sc-btn:active { color: var(--text); }
 .sc-btn.on { color: var(--yellow); }
+.sc-btn .material-symbols-outlined {
+  font-size: 38px; line-height: 1;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
 #sc-playpause {
   width: 96px; height: 96px;
   background: var(--yellow); color: #000; font-size: 36px; border-radius: 50%;
@@ -909,7 +937,7 @@ html, body {
     max-width: 200px;
     gap: 10px;
   }
-  #sc-art { width: 56px; height: 56px; }
+  #sc-art-wrap, #sc-art { width: 56px; height: 56px; }
   #sc-track-title  { font-size: 22px; }
   #sc-track-artist { font-size: 18px; }
   .sc-btn { width: 80px; height: 80px; font-size: 38px; }

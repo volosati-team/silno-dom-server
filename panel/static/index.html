@@ -9,6 +9,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='1534 -129 1039 1039'><rect x='1534' y='-129' width='1039' height='1039' fill='%23000'/><path fill='%23fff500' d='M1821.6281 780.5911C1899.2181 780.5911 1976.8079 780.5911 2054.3978 780.5911C2225.1906 780.5911 2285.6448 705.6983 2285.6448 591.5219C2285.6448 590.5298 2285.6448 589.5377 2285.6448 588.5453C2285.6448 478.7985 2214.614 410.5854 2064.2151 410.5854C2050.6132 410.5854 2037.0113 410.5854 2023.4095 410.5854C2023.4095 357.1966 2023.4095 303.8079 2023.4095 250.4191C1956.149 167.2802 1888.8886 84.1411 1821.6281 1.002C1821.6281 260.8651 1821.6281 520.728 1821.6281 780.5911ZM2023.4095 638.9665C2023.4095 607.8211 2023.4095 576.6757 2023.4095 545.5305C2029.4597 545.5305 2035.51 545.5305 2041.5602 545.5305C2077.837 545.5305 2095.9664 561.1219 2095.9664 592.2591C2095.9664 593.243 2095.9664 594.2269 2095.9664 595.2108C2095.9664 625.6144 2078.5788 638.9665 2042.2984 638.9665C2036.0022 638.9665 2029.7057 638.9665 2023.4095 638.9665Z'/></svg>">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
 <link rel="stylesheet" href="/app.css?v=1779680101">
 </head>
 <body>
@@ -299,11 +300,11 @@
 <div id="sc-controls">
   <button id="sc-expand-btn" onclick="toggleMediaPanel()" title="Открыть плеер"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
   <div id="sc-ctrl-left">
-    <button class="sc-btn" id="sc-shuffle" onclick="scToggleShuffle()" title="Shuffle">⇄</button>
+    <button class="sc-btn" id="sc-shuffle" onclick="scToggleShuffle()" title="Shuffle"><span class="material-symbols-outlined">shuffle</span></button>
     <button class="sc-btn" id="sc-prev" onclick="scPrev()">⏮</button>
     <button class="sc-btn" id="sc-playpause" onclick="scPlayPause()"><svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
     <button class="sc-btn" id="sc-next" onclick="scNext()">⏭</button>
-    <button class="sc-btn" id="sc-repeat" onclick="scToggleRepeat()" title="Repeat">↻</button>
+    <button class="sc-btn" id="sc-repeat" onclick="scToggleRepeat()" title="Repeat"><span class="material-symbols-outlined">repeat</span></button>
   </div>
   <div id="sc-ctrl-center">
     <span id="sc-time-cur">0:00</span>
@@ -311,7 +312,17 @@
     <span id="sc-time-dur">0:00</span>
   </div>
   <div id="sc-ctrl-right">
-    <img id="sc-art" src="" alt="">
+    <div id="sc-art-wrap">
+      <img id="sc-art" src="" alt="">
+      <button id="meta-debug-open" onclick="showMetaDebug()" title="Metadata debug">i</button>
+      <div id="meta-debug-overlay" class="hidden">
+        <div id="meta-debug-head">
+          <span>Metadata debug</span>
+          <button id="meta-debug-close" onclick="hideMetaDebug()">×</button>
+        </div>
+        <pre id="meta-debug-json">{}</pre>
+      </div>
+    </div>
     <div id="sc-track-info">
       <div id="sc-track-title-row">
         <div id="sc-track-title">—</div>

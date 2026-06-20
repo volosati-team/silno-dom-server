@@ -661,6 +661,26 @@ async def api_saved_list_put(request: Request):
     return text_response("\"ok\"")
 
 
+@app.get("/api/player-state")
+async def api_player_state_get():
+    raw = kv_get("player_state")
+    return text_response(raw or '{"loopMode":"all"}')
+
+
+@app.put("/api/player-state")
+async def api_player_state_put(request: Request):
+    body_bytes = await request.body()
+    try:
+        state = json.loads(body_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return text_response("bad json", status=400, content_type="text/plain")
+    loop_mode = state.get("loopMode") if isinstance(state, dict) else None
+    if loop_mode not in {"all", "one", "off"}:
+        loop_mode = "all"
+    kv_put("player_state", json.dumps({"loopMode": loop_mode}))
+    return text_response("\"ok\"")
+
+
 # ---------------------------------------------------------------------------
 # Debug log
 # ---------------------------------------------------------------------------
