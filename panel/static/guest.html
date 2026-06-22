@@ -80,10 +80,7 @@ button:active { opacity: 0.7; }
 </div>
 
 <script>
-const sid = new URLSearchParams(location.search).get('s');
-if (!sid) {
-  document.body.innerHTML = '<p style="color:#2e2e48;font-size:14px;text-align:center;padding:20px">Сессия не найдена.<br>Открой QR заново.</p>';
-}
+const sid = new URLSearchParams(location.search).get('s') || 'stable';
 
 document.getElementById('go-btn').addEventListener('click', submit);
 document.getElementById('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });

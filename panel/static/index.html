@@ -9,7 +9,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0a0a0a">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='1534 -129 1039 1039'><rect x='1534' y='-129' width='1039' height='1039' fill='%23000'/><path fill='%23fff500' d='M1821.6281 780.5911C1899.2181 780.5911 1976.8079 780.5911 2054.3978 780.5911C2225.1906 780.5911 2285.6448 705.6983 2285.6448 591.5219C2285.6448 590.5298 2285.6448 589.5377 2285.6448 588.5453C2285.6448 478.7985 2214.614 410.5854 2064.2151 410.5854C2050.6132 410.5854 2037.0113 410.5854 2023.4095 410.5854C2023.4095 357.1966 2023.4095 303.8079 2023.4095 250.4191C1956.149 167.2802 1888.8886 84.1411 1821.6281 1.002C1821.6281 260.8651 1821.6281 520.728 1821.6281 780.5911ZM2023.4095 638.9665C2023.4095 607.8211 2023.4095 576.6757 2023.4095 545.5305C2029.4597 545.5305 2035.51 545.5305 2041.5602 545.5305C2077.837 545.5305 2095.9664 561.1219 2095.9664 592.2591C2095.9664 593.243 2095.9664 594.2269 2095.9664 595.2108C2095.9664 625.6144 2078.5788 638.9665 2042.2984 638.9665C2036.0022 638.9665 2029.7057 638.9665 2023.4095 638.9665Z'/></svg>">
-<link rel="stylesheet" href="/app.css?v=1779680101">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0">
+<link rel="stylesheet" href="/app.css?v=1781914850">
 </head>
 <body>
 
@@ -192,68 +193,41 @@
   <div id="media-inner">
     <div id="media-player">
       <div id="saved-panel">
-        <div class="panel-tabs">
-          <button class="panel-tab active" data-tab="saved" onclick="switchPanelTab('saved')">Saved</button>
-          <button class="panel-tab" data-tab="radio" onclick="switchPanelTab('radio')">Radio</button>
+        <div id="saved-panel-hdr">
+          <button id="saved-add-btn" onclick="showGuestQR()" title="Добавить">＋</button>
+          <span id="saved-panel-title">Saved</span>
+          <button id="saved-search-btn" onclick="toggleSearchInput()" title="Поиск музыки">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="7"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </button>
         </div>
-        <div class="panel-content">
-          <!-- Saved tab -->
-          <div class="panel-tab-pane active" id="pane-saved">
-            <div id="saved-panel-hdr">
-              <button id="saved-add-btn" onclick="showGuestQR()" title="Добавить">＋</button>
-              <span id="saved-panel-title">Saved</span>
-              <button id="saved-search-btn" onclick="toggleSearchInput()" title="Поиск музыки">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7"/>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-              </button>
-            </div>
-            <div id="saved-add-row">
-              <input id="saved-add-input" type="url" placeholder="soundcloud.com · youtube.com · spotify.com" spellcheck="false">
-              <button id="saved-add-ok">▶</button>
-            </div>
-            <div id="saved-search-row">
-              <input id="saved-search-input" type="search" placeholder="что слушаем — артист, трек, жанр" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();searchSubmit();}">
-              <button id="saved-search-ok" onclick="searchSubmit()">→</button>
-            </div>
-            <div id="search-results"></div>
-            <div id="saved-edit-bar">
-              <button id="saved-edit-done" onclick="exitSavedEdit()">Готово</button>
-            </div>
-            <div id="saved-list">
-              <div id="saved-empty">Пока пусто.<br>Добавь первый плейлист.</div>
-            </div>
-          </div>
-          <!-- Radio tab -->
-          <div class="panel-tab-pane" id="pane-radio">
-            <div id="radio-search-bar">
-              <input id="radio-search-input" type="search" placeholder="артист, трек, жанр..." spellcheck="false">
-              <button id="radio-search-yt" class="radio-src-btn active" onclick="radioSetSrc('youtube')" title="YouTube">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0C.488 3.45.029 5.804 0 12c.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0C23.512 20.55 23.971 18.196 24 12c-.029-6.185-.484-8.549-4.385-8.816zM9 16V8l8 4-8 4z"/></svg>
-              </button>
-              <button id="radio-search-sc" class="radio-src-btn" onclick="radioSetSrc('soundcloud')" title="SoundCloud">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M1.175 12.575c-.233 0-.425.192-.425.425v2.1c0 .234.192.425.425.425H2.3v-2.95H1.175zm2.183 0c-.233 0-.424.192-.424.425v2.1c0 .234.191.425.424.425h1.125v-2.95H3.358zm2.183 0c-.233 0-.425.192-.425.425v2.1c0 .234.192.425.425.425h1.125v-2.95H5.541zm2.184 0c-.234 0-.425.192-.425.425v2.1c0 .234.191.425.425.425h1.124v-2.95H7.725zm2.2 0c-.234 0-.434.192-.434.425v2.1c0 .234.2.425.434.425h1.125v-2.95H9.925zm2.141 0c-.233 0-.425.192-.425.425v2.1c0 .234.192.425.425.425h1.125v-2.95H12.066zm1.159-2.492c-.512.03-.942.196-1.267.438v2.054H14.1c.959 0 1.733-.775 1.733-1.733h.042V9.35c0-.55-.283-1.05-.575-1.05-.275 0-.475.45-.492 1.008-.017-.559-.2-1.008-.475-1.008-.275 0-.475.5-.475 1.125 0 .625-.2 1.125-.475 1.125-.275 0-.475-.45-.492-1.008-.017.558-.217 1.008-.492 1.008-.275 0-.492-.492-.492-1.1v-.159c-.009-.617-.234-1.117-.55-1.117zm-2.2 2.492c-.233 0-.433.192-.433.425v2.1c0 .234.2.425.433.425h1.125v-2.95h-1.125zm4.292 0c-.1 0-.2.033-.283.092v2.858h1.125c.233 0 .425-.191.425-.425v-2.1c0-.234-.192-.425-.425-.425h-.842zm2.45 0c-.1 0-.2.033-.283.092v2.858H18.4c.233 0 .425-.191.425-.425v-2.1c0-.234-.192-.425-.425-.425h-.842zm-2.133 0V12.575h.842c.233 0 .425-.191.425-.425v-2.1c0-.234-.192-.425-.425-.425h-.842z"/></svg>
-              </button>
-            </div>
-            <div id="radio-results"></div>
-            <div id="radio-now-playing">
-              <img id="radio-np-art" src="" alt="">
-              <div id="radio-np-info">
-                <div id="radio-np-title">Ничего не играет</div>
-                <div id="radio-np-channel"></div>
-              </div>
-              <button id="radio-np-close" onclick="radioStop()" title="Остановить">✕</button>
-            </div>
-          </div>
+        <div id="saved-add-row">
+          <input id="saved-add-input" type="url" placeholder="soundcloud.com · youtube.com · spotify.com" spellcheck="false">
+          <button id="saved-add-ok">▶</button>
+        </div>
+        <div id="saved-search-row">
+          <input id="saved-search-input" type="search" placeholder="что слушаем — артист, трек, жанр" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();searchSubmit();}">
+          <button id="saved-search-ok" onclick="searchSubmit()">→</button>
+        </div>
+        <div id="search-results"></div>
+        <div id="saved-edit-bar">
+          <button id="saved-edit-done" onclick="exitSavedEdit()">Готово</button>
+        </div>
+        <div id="saved-list">
+          <div id="saved-empty">Пока пусто.<br>Добавь первый плейлист.</div>
         </div>
       </div>
       <button id="saved-tab" onclick="toggleSavedPanel()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></button>
       <div id="media-track-wrap">
       <div id="media-track">
         <div class="mslide" id="yt-slide">
+          <div id="yt-thumb-poster" aria-hidden="true"><img id="yt-thumb-img" alt=""></div>
+          <video id="yt-video" playsinline webkit-playsinline muted autoplay preload="auto"></video>
           <iframe id="yt-frame" src="about:blank"
             allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+            referrerpolicy="origin"
             allowfullscreen></iframe>
           <div id="yt-error-overlay">
             <div id="yt-error-banner">
@@ -274,6 +248,25 @@
           <div id="sc-likes-list"></div>
           <div id="sc-frame-wrap">
             <iframe id="sc-frame" src="about:blank" allow="autoplay"></iframe>
+            <div id="sc-native-visual" aria-hidden="true">
+              <div id="sc-native-art-wrap"><img id="sc-native-art" alt=""></div>
+              <div id="sc-native-meta">
+                <div id="sc-native-title">SoundCloud</div>
+                <div id="sc-native-sub">native stream</div>
+              </div>
+            </div>
+            <div id="sc-queue-panel" aria-live="polite">
+              <div id="sc-queue-now">
+                <div class="sc-queue-kicker">Сейчас играет</div>
+                <div id="sc-queue-now-title">—</div>
+                <div id="sc-queue-now-sub">SoundCloud</div>
+              </div>
+              <div id="sc-up-next">
+                <div class="sc-queue-kicker">Дальше</div>
+                <div id="sc-up-next-list"></div>
+                <div id="sc-up-next-empty">Следующие треки появятся после загрузки плейлиста</div>
+              </div>
+            </div>
             <div id="sc-placeholder">
               <div id="sc-ph-icon">☁</div>
               <div>Вставь ссылку SC или подключи аккаунт</div>
@@ -299,11 +292,11 @@
 <div id="sc-controls">
   <button id="sc-expand-btn" onclick="toggleMediaPanel()" title="Открыть плеер"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg></button>
   <div id="sc-ctrl-left">
-    <button class="sc-btn" id="sc-shuffle" onclick="scToggleShuffle()" title="Shuffle">⇄</button>
+    <button class="sc-btn" id="sc-shuffle" onclick="scToggleShuffle()" title="Shuffle"><span class="material-symbols-outlined">shuffle</span></button>
     <button class="sc-btn" id="sc-prev" onclick="scPrev()">⏮</button>
     <button class="sc-btn" id="sc-playpause" onclick="scPlayPause()"><svg viewBox="0 0 24 24" width="60%" height="60%" fill="#000" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></button>
     <button class="sc-btn" id="sc-next" onclick="scNext()">⏭</button>
-    <button class="sc-btn" id="sc-repeat" onclick="scToggleRepeat()" title="Repeat">↻</button>
+    <button class="sc-btn" id="sc-repeat" onclick="scToggleRepeat()" title="Repeat"><span class="material-symbols-outlined">repeat</span></button>
   </div>
   <div id="sc-ctrl-center">
     <span id="sc-time-cur">0:00</span>
@@ -311,7 +304,17 @@
     <span id="sc-time-dur">0:00</span>
   </div>
   <div id="sc-ctrl-right">
-    <img id="sc-art" src="" alt="">
+    <div id="sc-art-wrap">
+      <img id="sc-art" src="" alt="">
+      <button id="meta-debug-open" onclick="showMetaDebug()" title="Metadata debug">i</button>
+      <div id="meta-debug-overlay" class="hidden">
+        <div id="meta-debug-head">
+          <span>Metadata debug</span>
+          <button id="meta-debug-close" onclick="hideMetaDebug()">×</button>
+        </div>
+        <pre id="meta-debug-json">{}</pre>
+      </div>
+    </div>
     <div id="sc-track-info">
       <div id="sc-track-title-row">
         <div id="sc-track-title">—</div>
@@ -413,6 +416,27 @@
   <button id="sched-save" onclick="saveSchedule()">Сохранить</button>
 </div>
 
+<!-- DOORBELL OVERLAY -->
+<div id="doorbell-overlay">
+  <div id="doorbell-card">
+    <div id="doorbell-video-wrap">
+      <img id="doorbell-video" src="" alt="Видеозвонок">
+      <img id="doorbell-snapshot" src="" alt="Снимок гостя">
+      <div id="doorbell-video-fallback">Нет видео</div>
+    </div>
+    <div id="doorbell-info">
+      <div id="doorbell-kicker">Входной звонок</div>
+      <div id="doorbell-title">Кто-то у двери</div>
+      <div id="doorbell-meta">GATE</div>
+      <div id="doorbell-status">Звонок</div>
+      <div id="doorbell-actions">
+        <button id="doorbell-open" onclick="doorbellOpen()">Открыть</button>
+        <button id="doorbell-end" onclick="doorbellEnd()">Завершить</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- MENU -->
 <div id="overlay"></div>
 <nav id="menu">
@@ -442,32 +466,16 @@
   </div>
 </nav>
 
-<script>
-// Debug console — only activate via ?debug=1 in URL, then persists in localStorage
-(function(){
-  try {
-    if (location.search.indexOf('debug=1') !== -1) localStorage.setItem('eruda_on', '1');
-    if (location.search.indexOf('debug=0') !== -1) localStorage.removeItem('eruda_on');
-    if (localStorage.getItem('eruda_on')) {
-      var s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/eruda';
-      s.onload = function() { eruda.init(); };
-      document.head.appendChild(s);
-    }
-  } catch(e) {}
-})();
-</script>
-
 <div id="console-pane">
   <div id="console-toolbar">
     <span id="console-title">CONSOLE</span>
     <button id="console-clear" onclick="window._lisaClearConsole&&window._lisaClearConsole()">CLR</button>
-    <button id="console-toggle" onclick="window._lisaToggleConsole&&window._lisaToggleConsole()">_</button>
+    <button id="console-close" onclick="window._lisaSetConsoleEnabled&&window._lisaSetConsoleEnabled(false)">X</button>
   </div>
-  <div id="console-body"></div>
+  <ol id="console-body" aria-label="Panel console"></ol>
 </div>
 <button id="console-show" onclick="window._lisaShowConsole&&window._lisaShowConsole()">≡</button>
 <div id="dim-overlay"></div>
-<script src="/app.js?v=1779680101"></script>
+<script src="/app.js?v=1781914850"></script>
 </body>
 </html>

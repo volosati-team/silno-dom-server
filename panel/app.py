@@ -43,6 +43,7 @@ from fastapi.responses import (
     PlainTextResponse,
     RedirectResponse,
     Response,
+    StreamingResponse,
 )
 from fastapi.staticfiles import StaticFiles
 
@@ -355,6 +356,9 @@ async def sc_auth(request: Request):
 # Guest session API
 # ---------------------------------------------------------------------------
 
+GUEST_STABLE_SESSION = "stable"
+
+
 @app.post("/api/guest-session")
 async def api_guest_session():
     sid = str(uuid.uuid4())
@@ -373,10 +377,11 @@ async def api_guest_submit(request: Request):
     title = body.get("title")
     if not session_id or not media_url:
         return json_response({}, status=400)
-    if kv_get(f"guest:{session_id}") is None:
+    if session_id != GUEST_STABLE_SESSION and kv_get(f"guest:{session_id}") is None:
         return json_response({"error": "session_expired"}, status=410)
     payload = json.dumps({"url": media_url, "title": title or None})
-    kv_put(f"guest:{session_id}:payload", payload, ttl=60)
+    ttl = None if session_id == GUEST_STABLE_SESSION else 60
+    kv_put(f"guest:{session_id}:payload", payload, ttl=ttl)
     return json_response({"ok": True})
 
 
@@ -661,6 +666,26 @@ async def api_saved_list_put(request: Request):
     return text_response("\"ok\"")
 
 
+@app.get("/api/player-state")
+async def api_player_state_get():
+    raw = kv_get("player_state")
+    return text_response(raw or '{"loopMode":"all"}')
+
+
+@app.put("/api/player-state")
+async def api_player_state_put(request: Request):
+    body_bytes = await request.body()
+    try:
+        state = json.loads(body_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return text_response("bad json", status=400, content_type="text/plain")
+    loop_mode = state.get("loopMode") if isinstance(state, dict) else None
+    if loop_mode not in {"all", "one", "off"}:
+        loop_mode = "all"
+    kv_put("player_state", json.dumps({"loopMode": loop_mode}))
+    return text_response("\"ok\"")
+
+
 # ---------------------------------------------------------------------------
 # Debug log
 # ---------------------------------------------------------------------------
@@ -717,16 +742,17 @@ async def api_dbg_log_recent():
 
 @app.get("/api/build", include_in_schema=False)
 async def api_build():
-    import subprocess
-    try:
-        out = subprocess.check_output(
-            ["git", "log", "-1", "--format=%h %cI"],
-            cwd=str(BASE_DIR), text=True, timeout=3
-        ).strip()
-        parts = out.split(" ", 1)
-        return json_response({"commit": parts[0], "date": parts[1] if len(parts) > 1 else ""})
-    except Exception:
-        return json_response({"commit": "unknown", "date": ""})
+    files = [
+        STATIC_DIR / "index.html",
+        STATIC_DIR / "app.js",
+        STATIC_DIR / "app.css",
+        STATIC_DIR / "admin.html",
+    ]
+    latest = max((path.stat().st_mtime for path in files if path.exists()), default=0)
+    version_date = ""
+    if latest:
+        version_date = datetime.fromtimestamp(latest, timezone.utc).astimezone().isoformat(timespec="seconds")
+    return json_response({"version_date": version_date})
 
 
 @app.post("/api/update", include_in_schema=False)
@@ -1006,12 +1032,95 @@ async def api_light_state():
 
 
 # ---------------------------------------------------------------------------
+# Doorbell proxy for /api/door/* and /doorbell/* — forwards to the GATE service
+# on port 8090 so the tablet can stay same-origin for commands and MJPEG media.
+# ---------------------------------------------------------------------------
+
+GATE_BACKEND = os.environ.get("GATE_BACKEND", "http://127.0.0.1:8090")
+
+
+@app.api_route(
+    "/api/door/{path:path}",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    include_in_schema=False,
+)
+async def fallthrough_door_api_proxy(path: str, request: Request):
+    target = f"{GATE_BACKEND}/api/door/{path}"
+    qs = request.url.query
+    if qs:
+        target = f"{target}?{qs}"
+    headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in ("host", "content-length")
+    }
+    body = await request.body()
+    try:
+        async with httpx.AsyncClient(timeout=15.0, trust_env=False) as client:
+            r = await client.request(request.method, target, headers=headers, content=body)
+    except Exception as exc:
+        return JSONResponse({"error": "gate_unreachable", "detail": str(exc)}, status_code=502)
+    resp_headers = {
+        k: v
+        for k, v in r.headers.items()
+        if k.lower() not in ("content-length", "transfer-encoding", "connection")
+    }
+    return Response(
+        content=r.content,
+        status_code=r.status_code,
+        headers=resp_headers,
+        media_type=r.headers.get("content-type"),
+    )
+
+
+@app.get("/doorbell/{path:path}", include_in_schema=False)
+async def fallthrough_doorbell_media_proxy(path: str, request: Request):
+    target = f"{GATE_BACKEND}/doorbell/{path}"
+    qs = request.url.query
+    if qs:
+        target = f"{target}?{qs}"
+    headers = {
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in ("host", "content-length")
+    }
+    client = httpx.AsyncClient(timeout=None, trust_env=False)
+    try:
+        upstream = await client.stream("GET", target, headers=headers).__aenter__()
+    except Exception as exc:
+        await client.aclose()
+        return JSONResponse({"error": "gate_media_unreachable", "detail": str(exc)}, status_code=502)
+
+    async def body_iter():
+        try:
+            async for chunk in upstream.aiter_bytes():
+                yield chunk
+        finally:
+            await upstream.aclose()
+            await client.aclose()
+
+    resp_headers = {
+        k: v
+        for k, v in upstream.headers.items()
+        if k.lower() not in ("content-length", "transfer-encoding", "connection")
+    }
+    return StreamingResponse(
+        body_iter(),
+        status_code=upstream.status_code,
+        headers=resp_headers,
+        media_type=upstream.headers.get("content-type"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Streaming proxy for /api/stream/* — forwards to the yt-dlp resolver service
 # on port 8083 so the kiosk can hit a same-origin URL. Kept explicit (not
 # part of the generic fallthrough) because the target backend differs.
 # ---------------------------------------------------------------------------
 
 STREAMING_BACKEND = "http://127.0.0.1:8083"
+PANEL_DEBUGGER_BACKEND = os.environ.get("PANEL_DEBUGGER_BACKEND", "http://127.0.0.1:8091")
+PANEL_DEBUGGER_TOKEN = os.environ.get("SILNO_PANEL_DEBUGGER_TOKEN", "silno-panel-debugger")
 
 
 @app.api_route(
@@ -1050,6 +1159,25 @@ async def fallthrough_streaming_proxy(path: str, request: Request):
         headers=resp_headers,
         media_type=r.headers.get("content-type"),
     )
+
+
+# ---------------------------------------------------------------------------
+# Panel Debugger fallback actions
+# ---------------------------------------------------------------------------
+
+@app.post("/api/panel-debugger/play-tap", include_in_schema=False)
+async def api_panel_debugger_play_tap():
+    try:
+        async with httpx.AsyncClient(timeout=3.0, trust_env=False) as client:
+            r = await client.post(
+                f"{PANEL_DEBUGGER_BACKEND}/device/tap",
+                headers={"Authorization": f"Bearer {PANEL_DEBUGGER_TOKEN}"},
+                json={"x": 300, "y": 964},
+            )
+        payload = r.json() if r.headers.get("content-type", "").startswith("application/json") else {"raw": r.text[:200]}
+        return json_response({"ok": r.status_code < 400, "debugger": payload}, status=200 if r.status_code < 400 else 502)
+    except Exception as exc:
+        return json_response({"ok": False, "error": "panel_debugger_unreachable", "detail": str(exc)}, status=503)
 
 
 # ---------------------------------------------------------------------------
